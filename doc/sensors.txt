@@ -1,0 +1,16 @@
+Login via ssh: (HP)
+  slogin Administrator@pl-byd-esxi13-ilo (password: ChangeMe)
+
+  show /system1/powersupply1
+  show /system1/powersupply2
+
+  show /system1         - power consumption
+  show /system1/sensor3 - I/O board temp
+  show /system1/sensor4 - Ambient zone
+  show /system1/sensor5 - CPU1
+  show /system1/sensor6 - CPU1
+  show /system1/sensor7 - Power supply
+  show /system1/sensor8 - CPU2
+  show /system1/sensor9 - CPU2
+
+  show /system1/log1    - logs
