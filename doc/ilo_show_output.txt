@@ -1,0 +1,18 @@
+status=0
+status_tag=COMMAND COMPLETED
+
+
+/system1/sensor3
+  Targets
+  Properties
+    DeviceID=Temp 1
+    ElementName=I/O Board Zone
+    OperationalStatus=Ok
+    RateUnits=Celsius
+    CurrentReading=50
+    SensorType=Temperature
+    HealthState=Ok
+    oemhp_CautionValue=70
+    oemhp_CriticalValue=75
+  Verbs
+    cd version exit show set
