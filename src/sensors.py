@@ -1,13 +1,13 @@
 import paramiko
 from iloresponse import ILOResponse
+import time
 
 class SSHiLoSensors:
 
     def __init__(self, host="pl-byd-esxi13-ilo", user="Administrator", password="ChangeMe"):
-        ssh = paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        # do some sh*t so that it works
-        ssh.connect(host, username=user, password=password)
+        self.ssh = paramiko.SSHClient()
+        self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.ssh.connect(host, username=user, password=password)
 
     def show(self, component):
         cmd = "show "+component
@@ -27,11 +27,12 @@ class SSHiLoSensors:
 
     def temp_sensors(self):
         temp = {}
-        sensors = ["/system1/sensor%u"%u for i in range(3,10)]
+        sensors = ["/system1/sensor%u"%i for i in range(3,10)]
 
         for component in sensors:   
             response = self.show(component)
             temp[response.get("ElementName")] = response.get("CurrentReading")
+            time.sleep(0.1) # otherwise it crashes
 
-        return sensors
+        return temp
 
