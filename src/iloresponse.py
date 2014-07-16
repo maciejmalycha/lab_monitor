@@ -8,8 +8,8 @@ class ILoResponse(object):
 		section = None
 
 		for line in lines:
-			# remove trailing newline
-			line = line.rstrip()
+			# remove trailing newline and convert from unicode to string
+			line = str(line.rstrip())
 
 			if line.startswith("    ") and section=="Properties":
 				# data
