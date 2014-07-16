@@ -4,7 +4,7 @@ import time
 
 paramiko.Transport._preferred_ciphers = ( 'aes128-cbc', '3des-cbc' )
 paramiko.Transport._preferred_macs = ( 'hmac-md5', 'hmac-sha1' )
-paramiko.Transport._preferred_kex = ( 'diffie-hellman-group1-sha1' )
+#paramiko.Transport._preferred_kex = ( 'diffie-hellman-group1-sha1' )
 paramiko.Transport._preferred_keys = ( 'ssh-rsa', 'ssh-dss' )
 paramiko.Transport._preferred_compression = ( 'none' )
 
@@ -20,7 +20,7 @@ class ILoSSHClient(paramiko.SSHClient):
 class SSHiLoSensors:
 
     def __init__(self, host="pl-byd-esxi13-ilo", user="Administrator", password="ChangeMe"):
-        self.ssh = paramiko.ILoSSHClient()
+        self.ssh = ILoSSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh.connect(host, username=user, password=password)
 
@@ -51,3 +51,6 @@ class SSHiLoSensors:
 
         return temp
 
+if __name__=='__main__':
+    s = SSHiLoSensors()
+    print s.power_use()
