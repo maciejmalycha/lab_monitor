@@ -1,6 +1,6 @@
-class ILOResponse(object):
+class ILoResponse(object):
 	"""
-	This class parses and stores output from ILO `show` command
+	This class parses and stores output from ILo `show` command
 	"""
 	def __init__(self, lines):
 		self.properties = {}
