@@ -4,8 +4,6 @@ import time
 
 paramiko.Transport._preferred_ciphers = ( 'aes128-cbc', '3des-cbc' )
 paramiko.Transport._preferred_macs = ( 'hmac-md5', 'hmac-sha1' )
-#paramiko.Transport._preferred_kex = ( 'diffie-hellman-group1-sha1' )
-# this line causes Incompatible ssh peer exception, even though the KEX looks correct
 paramiko.Transport._preferred_keys = ( 'ssh-rsa', 'ssh-dss' )
 paramiko.Transport._preferred_compression = ( 'none' )
 

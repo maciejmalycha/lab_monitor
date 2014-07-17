@@ -1,15 +1,33 @@
+from datetime import datetime
 
-import time
-import sqlalchemy
+from sqlalchemy import *
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
 
-class ILoDatabase:
+Base = declarative_base()
+Session = sessionmaker()
+
+class Temperature(Base):
+	__tablename__ = 'temperature'
+
+	id_ = Column(Integer, primary_key=True)
+	timestamp = Column(DateTime)
+	server = Column(String(30))
+	sensor = Column(String(30))
+	reading = Column(Integer)
+
+	def __init__(self, server, sensor, reading):
+		self.timestamp = datetime.now()
+		self.server = server
+		self.sensor = sensor
+		self.reading = reading
+
+
+class SensorsDAO:
 	def __init__(self, db='sqlite:///../lab_monitor.sqlite'):
-		self.engine = sqlalchemy.create_engine(db)
-
-		meta = sqlalchemy.MetaData()
-		self.power_usage = sqlalchemy.Table('power_usage', meta, autoload=True, autoload_with=self.engine)
-		self.power_units = sqlalchemy.Table('power_units', meta, autoload=True, autoload_with=self.engine)
-		self.temperature = sqlalchemy.Table('temperature', meta, autoload=True, autoload_with=self.engine)
+		self.engine = create_engine(db)
+		Base.metadata.create_all(self.engine)
+		Session.configure(bind=self.engine)
 
 	def store_power_usage(self, data):
 		"""
@@ -21,10 +39,18 @@ class ILoDatabase:
 		Inserts power units data (from sensors.SSHiLoSensors.power_units) to the database
 		"""
 
-	def store_temperature(self, data):
+	def store_temperature(self, server, sensor, reading):
 		"""
 		Inserts temperature sensor reads (from sensors.SSHiLoSensors.temp_sensors) to the database
 		"""
+		session = Session()
+		try:
+			t = Temperature(server, sensor, reading)
+			session.add(t)
+			session.commit()
+		except:
+			session.rollback()
+			raise
 
 	def get_power_usage(self, num=10):
 		"""
