@@ -1,4 +1,4 @@
-import paramiko
+import paramiko, time
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
@@ -50,7 +50,9 @@ class ESXiHypervisor:
                     print i.id, "IS NOT down"
                     print "Shutting down", i.id, " with power.off command"
                     i.force_shutdown()
-        print self.status()
+                    i.stat = False
+        time.sleep(10)
+
         print "All done. Powering off"
         #self.force_shutdown()         #shutting down the hypervisor after work is done
 
@@ -61,11 +63,11 @@ class ESXiHypervisor:
 
     def force_shutdown_VirtualMachine(self, VM_id):
         stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.off " + str(VM_id))
-        print "OUT", stdout.read()
-        print "ERR", stderr.read()
+        time.sleep(1)
 
     def shutdown_VirtualMachine(self, VM_id):
         stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.shutdown " + str(VM_id))
+        time.sleep(1)
         return stderr
 
 class ESXiVirtualMachine:
