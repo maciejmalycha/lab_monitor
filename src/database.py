@@ -22,6 +22,26 @@ class ServerStatus(Base):
         self.status = status
 
 
+class PowerUsage(Base):
+    __tablename__ = 'power_usage'
+
+    id_ = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime)
+    server = Column(String(30))
+    present = Column(Integer)
+    average = Column(Integer)
+    mininum = Column(Integer)
+    maximum = Column(Integer)
+
+    def __init__(self, server, present, average, minimum, maximum):
+        self.timestamp = datetime.now()
+        self.server = server
+        self.present = present
+        self.average = average
+        self.minimum = minimum
+        self.maximum = maximum
+
+
 class PowerUnits(Base):
     __tablename__ = 'power_units'
 
@@ -38,27 +58,6 @@ class PowerUnits(Base):
         self.power_supply = power_supply
         self.operational = operational
         self.health = health
-
-
-class PowerUsage(Base):
-    __tablename__ = 'power_usage'
-
-    id_ = Column(Integer, primary_key=True)
-    timestamp = Column(DateTime)
-    server = Column(String(30))
-    present = Column(Integer)
-    average = Column(Integer)
-    mininum = Column(Integer)
-    maximum = Column(Integer)
-
-    def __init__(self, server, present, average, mininum, maximum):
-        self.timestamp = datetime.now()
-        self.server = server
-        self.present = present
-        self.average = average
-        self.minimum = minimum
-        self.maximum = maximum
-
 
 class Temperature(Base):
     __tablename__ = 'temperature'
@@ -94,11 +93,15 @@ class SensorsDAO:
             session.rollback()
             raise
 
-    def store_power_usage(self, server, present, average, mininum, maximum):
+    def store_server_status(self, server, status):
         """Inserts power usage record to the database"""
-        self.insert(PowerUsage, server, present, average, mininum, maximum)
+        self.insert(ServerStatus, server, status)
 
-    def store_power_units(self, server, power_supply, operational, health):
+    def store_power_usage(self, server, present, average, minimum, maximum):
+        """Inserts power usage record to the database"""
+        self.insert(PowerUsage, server, present, average, minimum, maximum)
+
+    def store_power_unit(self, server, power_supply, operational, health):
         """Inserts power unit record to the database"""
         self.insert(PowerUnits, server, power_supply, operational, health)
 

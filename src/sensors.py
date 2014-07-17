@@ -24,6 +24,7 @@ class SSHiLoSensors:
 
     def __init__(self, host="pl-byd-esxi13-ilo", user="Administrator", password="ChangeMe"):
         """Establishes connection with the iLo server"""
+        self.host = host
         self.ssh = ILoSSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh.connect(host, username=user, password=password)
