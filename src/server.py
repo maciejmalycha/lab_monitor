@@ -2,21 +2,35 @@ import paramiko
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
-    def __init__(self, hostname, username, password):
+    def __init__(self, hostname , username, password , own_id):
         self.ssh = paramiko.SSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh.connect(hostname, username=username, password=password)
         self.AVMIDS = []
         self.VMSL = {}
+        self.H_id = own_id
 
+    def get_status(self, Req_id):
+        stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.getstate " + str(Req_id) + "| tail -1 | awk '{print $2}'")
+        stdout = stdout.read()
+        stdout = stdout.strip('\n')
+
+        if stdout == "on":
+            return True
+        else:
+            return False
+        
     #IDs of VMs are stored in an array, then we loop over IDs and get their statuses
     #If status is 'on', then we shutdown the VM and we add the ID to the list of IDs that are shutted down by us
     def status(self):
         self.VMIDin, self.VMIDout, self.VMIDerr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/getallvms | grep -v Vmid | awk '{print $1}'")
+        self.VMIDout = self.VMIDout.read()
+        self.VMIDout = self.VMIDout.split()
+        
         for i in self.VMIDout:
             VM_id = int(i)
-            Act_VM = ESXiVirtualMachine(VM_id)
-            Act_VM.stat = Act_VM.status()
+            Act_VM = ESXiVirtualMachine(VM_id, self.H_id)
+            Act_VM.stat = self.get_status(VM_id)
             if Act_VM.stat:
                 self.AVMIDS.append(Act_VM)
             self.VMSL[Act_VM.id] = Act_VM.stat
@@ -24,14 +38,16 @@ class ESXiHypervisor:
 
     #Shutting down every working VM
     def shutdown(self):
-        while self.AVMIDS.size:           #probably unnecessary loop
-            print "AVMIDS:", self.AVMIDS
-            for i in self.AVMIDS:
-                if i.stat == False:
-                    print "VMID down:", i
-                    self.AVMIDS.remove(i) #if element is unique, then this should work, otherwise we should just pop from the front of the list
+        for i in self.AVMIDS:
+            if i.stat == False:
+                print "VMID down:", i
+                self.AVMIDS.remove(i) #if element is unique, then this should work
+            else:
+                self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.shutdown " + str(i.id))
+                i.stat = False
+
         print "All done. Powering off"
-        self.shutdown()         #shutting down the hypervisor after work is done
+        #self.force_shutdown()         #shutting down the hypervisor after work is done
 
     #Shutting down the hypervisor
     def force_shutdown(self):
@@ -40,19 +56,15 @@ class ESXiHypervisor:
 
 class ESXiVirtualMachine:
 
-    def __init__(self, VMid):
+    def __init__(self, VMid, H_id):
         self.id = VMid
         self.stat = None
+        self.H_id = H_id
 
     #Returning status of VM
     def status(self):
-        stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.getstate " + self.id + "| tail -1 | awk '{print $2}'")
-        if str(stdout) == 'on':
-            self.stat = True
-            return self.stat
-        else:
-            self.stat = False
-            return self.stat
+        pass
+        
 
     #Shutting down VM
     def shutdown(self):
