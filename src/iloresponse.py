@@ -1,6 +1,6 @@
-class ILOResponse(object):
+class ILoResponse(object):
 	"""
-	This class parses and stores output from ILO `show` command
+	This class parses and stores output from ILo `show` command
 	"""
 	def __init__(self, lines):
 		self.properties = {}
@@ -8,8 +8,8 @@ class ILOResponse(object):
 		section = None
 
 		for line in lines:
-			# remove trailing newline
-			line = line.rstrip()
+			# remove trailing newline and convert from unicode to string
+			line = str(line.rstrip())
 
 			if line.startswith("    ") and section=="Properties":
 				# data
