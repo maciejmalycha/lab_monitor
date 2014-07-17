@@ -9,7 +9,7 @@ class ESXiHypervisor:
         self.AVMIDS = []
         self.VMSL = {}
         self.H_id = own_id
-
+ 
     def get_status(self, Req_id):
         stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.getstate " + str(Req_id) + "| tail -1 | awk '{print $2}'")
         stdout = stdout.read()
@@ -21,7 +21,7 @@ class ESXiHypervisor:
             return False
         
     #IDs of VMs are stored in an array, then we loop over IDs and get their statuses
-    #If status is 'on', then we shutdown the VM and we add the ID to the list of IDs that are shutted down by us
+    #If status is 'on', then we shutdown the VM and we add the ID to the list of IDs that are already shutted down by us
     def status(self):
         self.VMIDin, self.VMIDout, self.VMIDerr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/getallvms | grep -v Vmid | awk '{print $1}'")
         self.VMIDout = self.VMIDout.read()
@@ -29,7 +29,7 @@ class ESXiHypervisor:
         
         for i in self.VMIDout:
             VM_id = int(i)
-            Act_VM = ESXiVirtualMachine(VM_id, self.H_id)
+            Act_VM = ESXiVirtualMachine(VM_id, self.H_id, self)
             Act_VM.stat = Act_VM.status()
             if Act_VM.stat:
                 self.AVMIDS.append(Act_VM)
@@ -42,16 +42,15 @@ class ESXiHypervisor:
             if i.stat == False:
                 print "VMID down:", i.id
             else:
-                result = i.shutdown(i.id)
+                result = i.shutdown()
                 if result.read() == "":
                     print i.id, "is down"
                     i.stat = False
                 else:
                     print i.id, "IS NOT down"
-                    print "Shutting down with HARD method", i.id, " with power.off command"
+                    print "Shutting down", i.id, " with power.off command"
                     i.force_shutdown()
-                    
-
+        print self.status()
         print "All done. Powering off"
         #self.force_shutdown()         #shutting down the hypervisor after work is done
 
@@ -61,7 +60,9 @@ class ESXiHypervisor:
         self.ssh.exec_command("/sbin/poweroff")
 
     def force_shutdown_VirtualMachine(self, VM_id):
-        self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.off " + str(VM_id))
+        stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.off " + str(VM_id))
+        print "OUT", stdout.read()
+        print "ERR", stderr.read()
 
     def shutdown_VirtualMachine(self, VM_id):
         stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.shutdown " + str(VM_id))
@@ -69,21 +70,22 @@ class ESXiHypervisor:
 
 class ESXiVirtualMachine:
 
-    def __init__(self, VMid, H_id):
+    def __init__(self, VMid, H_id, hypervisor):
         self.id = VMid
         self.stat = None
         self.H_id = H_id
+        self.ESXiHypervisor = hypervisor
 
     #Returning status of a VM
     def status(self):
-        return self.ESXiHypervisor.get_status(self.id)
+        return ESXiHypervisor.get_status(self.ESXiHypervisor, self.id)
 
     #Shutting down a VM
     def shutdown(self):
-        return self.ESXiHypervisor.shutdown_VirtualMachine(self.id)
+        return ESXiHypervisor.shutdown_VirtualMachine(self.ESXiHypervisor, self.id)
     
     #Force shutting down of a VM    
     def force_shutdown(self):
-        return self.ESXiHypervisor.force_shutdown(self.id)
+        return ESXiHypervisor.force_shutdown_VirtualMachine(self.ESXiHypervisor, self.id)
 
 
