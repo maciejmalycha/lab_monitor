@@ -1,11 +1,26 @@
 from datetime import datetime
+from contextlib import contextmanager
 
 from sqlalchemy import *
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
+
 Base = declarative_base()
 Session = sessionmaker()
+
+
+@contextmanager
+def session_scope():
+    session = Session()
+    try:
+        yield session
+        session.commit()
+    except:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 class ServerStatus(Base):
@@ -59,6 +74,7 @@ class PowerUnits(Base):
         self.operational = operational
         self.health = health
 
+
 class Temperature(Base):
     __tablename__ = 'temperature'
 
@@ -75,39 +91,31 @@ class Temperature(Base):
         self.reading = reading
 
 
-
 class SensorsDAO:
     def __init__(self, db='sqlite:///../lab_monitor.sqlite'):
         self.engine = create_engine(db)
         Base.metadata.create_all(self.engine)
         Session.configure(bind=self.engine)
 
-    def insert(self, table, *args):
-        """Generic insert"""
-        session = Session()
-        try:
-            t = table(*args)
-            session.add(t)
-            session.commit()
-        except:
-            session.rollback()
-            raise
-
     def store_server_status(self, server, status):
         """Inserts power usage record to the database"""
-        self.insert(ServerStatus, server, status)
+        with session_scope() as session:
+            session.add(ServerStatus(server, status))
 
     def store_power_usage(self, server, present, average, minimum, maximum):
         """Inserts power usage record to the database"""
-        self.insert(PowerUsage, server, present, average, minimum, maximum)
+        with session_scope() as session:
+            session.add(PowerUsage(server, present, average, minimum, maximum))
 
     def store_power_unit(self, server, power_supply, operational, health):
         """Inserts power unit record to the database"""
-        self.insert(PowerUnits, server, power_supply, operational, health)
+        with session_scope() as session:
+            session.add(PowerUnits(server, power_supply, operational, health))
 
     def store_temperature(self, server, sensor, reading):
         """Inserts temperature sensor reading to the database"""
-        self.insert(Temperature, server, sensor, reading)
+        with session_scope() as session:
+            session.add(Temperature(server, sensor, reading))
 
     def get_power_usage(self, num=10):
         """Loads num last power usage data records from the database"""
