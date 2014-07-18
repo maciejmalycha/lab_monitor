@@ -23,6 +23,20 @@ def session_scope():
         session.close()
 
 
+
+class Server(Base):
+    __tablename__ = 'server'
+
+    id_ = Column(Integer, primary_key=True)
+    addr = Column(String(30))
+    type_ = Column(String(30))
+
+    def __init__(self, addr, type_):
+        self.addr = addr
+        self.type_ = type_
+
+
+
 class ServerStatus(Base):
     __tablename__ = 'server_status'
 
@@ -96,6 +110,25 @@ class SensorsDAO:
         self.engine = create_engine(db)
         Base.metadata.create_all(self.engine)
         Session.configure(bind=self.engine)
+
+    def server_create(self, addr, type_):
+        """Adds a new server to monitor"""
+        with session_scope() as session:
+            session.add(Server(addr, type_))
+
+    def server_list(self):
+        """Returns all monitored servers as a list of dictionaries"""
+        with session_scope() as session:
+            return [{'addr':serv.addr, 'type':serv.type_} for serv in session.query(Server)]
+
+    def server_delete(self, id_=None, addr=None):
+        with session_scope() as session:
+            if id_ is not None:
+                serv = session.query(Server).get(id_)
+            elif addr is not None:
+                serv = session.query(Server).filter(Server.addr==addr)[0]
+
+            session.delete(serv)
 
     def store_server_status(self, server, status):
         """Inserts power usage record to the database"""
