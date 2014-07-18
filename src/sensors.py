@@ -8,10 +8,6 @@ paramiko.Transport._preferred_keys = ( 'ssh-rsa', 'ssh-dss' )
 paramiko.Transport._preferred_compression = ( 'none' )
 
 
-def first2int(val):
-    a,b = val.split(' ')
-    return int(a)
-
 class ILoSSHClient(paramiko.SSHClient):
     def _auth(self, username, password, *args, **kwargs):
         if password is not None:
@@ -46,10 +42,10 @@ class SSHiLoSensors:
         """Returns power usage"""
         response = self.show("/system1")
         return {
-            'present': first2int(response['oemhp_PresentPower']),
-            'avg': first2int(response['oemhp_AveragePower']),
-            'min': first2int(response['oemhp_MinPower']),
-            'max': first2int(response['oemhp_MaxPower'])
+            'present': int(response['oemhp_PresentPower'].split()[0]),
+            'avg': int(response['oemhp_AveragePower'].split()[0]),
+            'min': int(response['oemhp_MinPower'].split()[0]),
+            'max': int(response['oemhp_MaxPower'].split()[0])
         }
 
     def power_units(self):
