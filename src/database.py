@@ -1,9 +1,12 @@
-from datetime import datetime
 from contextlib import contextmanager
 
 from sqlalchemy import *
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+
+from datetime import datetime, timedelta
+from time import strptime, mktime
+from collections import defaultdict
 
 
 Base = declarative_base()
@@ -25,7 +28,7 @@ def session_scope():
 
 
 class Server(Base):
-    __tablename__ = 'server'
+    __tablename__ = 'servers'
 
     id_ = Column(Integer, primary_key=True)
     addr = Column(String(30))
@@ -150,11 +153,27 @@ class SensorsDAO:
         with session_scope() as session:
             session.add(Temperature(server, sensor, reading))
 
-    def get_power_usage(self, num=10):
-        """Loads num last power usage data records from the database"""
+    def get_power_usage(self, server, start=None, end=None):
+        """Loads num last power usage data records from <start, end> range (last hour by default)"""
+            
 
-    def get_power_units(self, num=10):
-        """Loads num last power units data records from the database"""
+    def get_power_units(self, server, start=None, end=None):
+        """Loads num last power units data records from <start, end> range (last hour by default)"""
 
-    def get_temperature(self, num=10):
-        """Loads num last temperature data records from the database"""
+    def get_temperature(self, server, start=None, end=None):
+        """Loads temperature data records from <start, end> range (last hour by default)"""
+
+        if end is None:
+            end = datetime.now()
+        if start is None:
+            start = end-timedelta(hours=1)
+
+        with session_scope() as session:
+            data = defaultdict(list)
+
+            q = session.query(Temperature).filter(Temperature.server==server, between(Temperature.timestamp, start, end)).order_by(Temperature.timestamp)
+            for row in q:
+                # Can't we store time as Unix timestamps? This would make things simpler.
+                data[row.sensor].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), row.reading])
+
+            return data

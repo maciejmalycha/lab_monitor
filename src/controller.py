@@ -15,9 +15,7 @@ class ILoController:
         self.log.setLevel(logging.DEBUG)
 
         ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG)
-        #formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        #ch.setFormatter(formatter)
+        ch.setLevel(logging.INFO)
         self.log.addHandler(ch)
 
         self.log.info("Initializing...")
@@ -37,7 +35,7 @@ class ILoController:
             self.log.debug("Connected to %s", conn.host)
 
         if len(self.servers) == 0:
-            self.log.info("Nothing to monitor, exitting")
+            self.log.info("Nothing to monitor, exiting")
             sys.exit()
 
     def store_data(self, server):
@@ -79,7 +77,7 @@ class ILoController:
                 t0 = time.time()
 
                 threads = []
-                for server in servers:
+                for server in self.servers:
                     t = threading.Thread(target=self.store_data, args=(server,))
                     t.start()
                     threads.append(t)
@@ -94,8 +92,6 @@ class ILoController:
                 # wait until next minute
                 self.log.debug("Waiting %u seconds...", wait)
                 time.sleep(wait)
-
-
                 
         except KeyboardInterrupt:
             self.log.info("Interrupt detected, exiting")
