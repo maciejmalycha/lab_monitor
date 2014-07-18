@@ -62,7 +62,7 @@ class PowerUsage(Base):
     server = Column(String(30))
     present = Column(Integer)
     average = Column(Integer)
-    mininum = Column(Integer)
+    minimum = Column(Integer)
     maximum = Column(Integer)
 
     def __init__(self, server, present, average, minimum, maximum):
@@ -155,6 +155,20 @@ class SensorsDAO:
 
     def get_power_usage(self, server, start=None, end=None):
         """Loads num last power usage data records from <start, end> range (last hour by default)"""
+        if end is None:
+            end = datetime.now()
+        if start is None:
+            start = end-timedelta(hours=1)
+
+        with session_scope() as session:
+            data = {'present':[], 'average':[], 'minimum':[], 'maximum':[]}
+
+            q = session.query(PowerUsage).filter(PowerUsage.server==server, between(PowerUsage.timestamp, start, end)).order_by(PowerUsage.timestamp)
+            for row in q:
+                for col in data.keys():
+                    data[col].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), getattr(row, col)])
+
+            return data
             
 
     def get_power_units(self, server, start=None, end=None):
@@ -162,7 +176,6 @@ class SensorsDAO:
 
     def get_temperature(self, server, start=None, end=None):
         """Loads temperature data records from <start, end> range (last hour by default)"""
-
         if end is None:
             end = datetime.now()
         if start is None:
