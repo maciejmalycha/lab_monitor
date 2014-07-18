@@ -60,6 +60,7 @@ class ESXiHypervisor:
             for i in AVMSL:
                 if self.get_status(int(i)):
                     err = self.shutdown_VirtualMachine(int(i))
+                    print "Shutting down VM: ", i
                     time.sleep(5)
                    # print err.read()
                     if err.read() != "":
@@ -73,12 +74,8 @@ class ESXiHypervisor:
         #self.ssh.exec_command("/sbin/poweroff")
 
     def force_shutdown_VirtualMachine(self, VM_id):
-<<<<<<< HEAD
         stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.off {0}".format(VM_id))
-=======
-        stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.off " + str(VM_id))
-        time.sleep(1)
->>>>>>> 9a56e7e3a03589085a20fc57dd121a91f03cd0bb
+        return stdout
 
     def shutdown_VirtualMachine(self, VM_id):
         stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.shutdown {0}".format(VM_id))
