@@ -45,4 +45,5 @@ elif target == "esxi_vm":
 		err = Example.shutdown_VirtualMachine(vmid)
 		if err.read() != "":
 			print "Error occured. Forcing a shutdown of VM: ", vmid
-			out = Example.force_shutdown_VirtualMachine(vmid)			
+			out = Example.force_shutdown_VirtualMachine(vmid)
+			print out.read()			
