@@ -1,0 +1,6 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+source $HOME/.virtualenv/lab_monitor/bin/activate
+python $DIR/../src/cmd_esxi.py $*
