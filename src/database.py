@@ -1,9 +1,12 @@
-from datetime import datetime
 from contextlib import contextmanager
 
 from sqlalchemy import *
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
+
+from datetime import datetime, timedelta
+from time import strptime, mktime
+from collections import defaultdict
 
 
 Base = declarative_base()
@@ -21,6 +24,20 @@ def session_scope():
         raise
     finally:
         session.close()
+
+
+
+class Server(Base):
+    __tablename__ = 'servers'
+
+    id_ = Column(Integer, primary_key=True)
+    addr = Column(String(30))
+    type_ = Column(String(30))
+
+    def __init__(self, addr, type_):
+        self.addr = addr
+        self.type_ = type_
+
 
 
 class ServerStatus(Base):
@@ -45,7 +62,7 @@ class PowerUsage(Base):
     server = Column(String(30))
     present = Column(Integer)
     average = Column(Integer)
-    mininum = Column(Integer)
+    minimum = Column(Integer)
     maximum = Column(Integer)
 
     def __init__(self, server, present, average, minimum, maximum):
@@ -97,6 +114,25 @@ class SensorsDAO:
         Base.metadata.create_all(self.engine)
         Session.configure(bind=self.engine)
 
+    def server_create(self, addr, type_):
+        """Adds a new server to monitor"""
+        with session_scope() as session:
+            session.add(Server(addr, type_))
+
+    def server_list(self):
+        """Returns all monitored servers as a list of dictionaries"""
+        with session_scope() as session:
+            return [{'addr':serv.addr, 'type':serv.type_} for serv in session.query(Server)]
+
+    def server_delete(self, id_=None, addr=None):
+        with session_scope() as session:
+            if id_ is not None:
+                serv = session.query(Server).get(id_)
+            elif addr is not None:
+                serv = session.query(Server).filter(Server.addr==addr)[0]
+
+            session.delete(serv)
+
     def store_server_status(self, server, status):
         """Inserts power usage record to the database"""
         with session_scope() as session:
@@ -117,11 +153,40 @@ class SensorsDAO:
         with session_scope() as session:
             session.add(Temperature(server, sensor, reading))
 
-    def get_power_usage(self, num=10):
-        """Loads num last power usage data records from the database"""
+    def get_power_usage(self, server, start=None, end=None):
+        """Loads num last power usage data records from <start, end> range (last hour by default)"""
+        if end is None:
+            end = datetime.now()
+        if start is None:
+            start = end-timedelta(hours=1)
 
-    def get_power_units(self, num=10):
-        """Loads num last power units data records from the database"""
+        with session_scope() as session:
+            data = {'present':[], 'average':[], 'minimum':[], 'maximum':[]}
 
-    def get_temperature(self, num=10):
-        """Loads num last temperature data records from the database"""
+            q = session.query(PowerUsage).filter(PowerUsage.server==server, between(PowerUsage.timestamp, start, end)).order_by(PowerUsage.timestamp)
+            for row in q:
+                for col in data.keys():
+                    data[col].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), getattr(row, col)])
+
+            return data
+            
+
+    def get_power_units(self, server, start=None, end=None):
+        """Loads num last power units data records from <start, end> range (last hour by default)"""
+
+    def get_temperature(self, server, start=None, end=None):
+        """Loads temperature data records from <start, end> range (last hour by default)"""
+        if end is None:
+            end = datetime.now()
+        if start is None:
+            start = end-timedelta(hours=1)
+
+        with session_scope() as session:
+            data = defaultdict(list)
+
+            q = session.query(Temperature).filter(Temperature.server==server, between(Temperature.timestamp, start, end)).order_by(Temperature.timestamp)
+            for row in q:
+                # Can't we store time as Unix timestamps? This would make things simpler.
+                data[row.sensor].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), row.reading])
+
+            return data

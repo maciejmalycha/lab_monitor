@@ -1,77 +1,102 @@
 
 from sensors import SSHiLoSensors
 from database import SensorsDAO
-from sys import stdout
-from datetime import datetime
+
+import time
+import logging
+import threading
+import sys
 
 class ILoController:
 
     def __init__(self):
+        self.log = logging.getLogger('lab_monitor.controller.ILoController')
+
+        self.log.setLevel(logging.DEBUG)
+
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        self.log.addHandler(ch)
+
+        self.log.info("Initializing...")
+
         self.db = SensorsDAO()
+        self.log.debug("Database opened")
+
         self.servers = []
-        self.log_stream = None
+        for serv in self.db.server_list():
+            try:
+                conn = SSHiLoSensors(serv['addr'])
+            except Exception as e:
+                self.log.error("Cannot connect to %s: %s", serv['addr'], e)
+                continue
 
-    def set_logging(self, log_stream):
-        self.log_stream = log_stream
+            self.servers.append(conn)
+            self.log.debug("Connected to %s", conn.host)
 
-    def log(self, message):
-        if self.log_stream is not None:
-            self.log_stream.write("[ %s ] %s\n"%(datetime.now(), message))
+        if len(self.servers) == 0:
+            self.log.info("Nothing to monitor, exiting")
+            sys.exit()
 
-    def add_server(self, host, username, password):
-        self.log("Adding %s to watched servers..."%host)
-        try:
-            server = SSHiLoSensors(host, username, password)
-            self.servers.append(server)
-        except:
-            self.log("Connection failed!")
-        self.log("Successfully connected to %s"%host)
+    def store_data(self, server):
+        self.log.info("Checking %s...", server.host)
 
-    def store_data(self):
-        for server in self.servers:
-            self.log("Checking %s..."%server.host)
+        self.log.debug("Loading status of %s...", server.host)
+        server_status = server.server_status()
+        self.log.debug("Storing status of %s...", server.host)
+        self.db.store_server_status(server.host, server_status)
 
-            self.log("Loading status...")
-            server_status = server.server_status()
-            self.log("Storing status...")
-            self.db.store_server_status(server.host, server_status)
+        self.log.debug("Loading power usage of %s...", server.host)
+        power_use = server.power_use()
+        self.log.debug("Storing power usage of %s...", server.host)
+        self.db.store_power_usage(server.host, power_use['present'], power_use['avg'], power_use['min'], power_use['max'])
 
-            self.log("Loading power usage...")
-            power_use = server.power_use()
-            self.log("Storing power usage...")
-            self.db.store_power_usage(server.host, power_use['present'], power_use['avg'], power_use['min'], power_use['max'])
+        self.log.debug("Loading power units of %s...", server.host)
+        power_units = server.power_units()
+        i = 0
+        for power_supply, state in power_units.iteritems():
+            i+=1
+            self.log.debug("Storing power unit %u/%u of %s...", i, len(power_units), server.host)
+            self.db.store_power_unit(server.host, power_supply, state['operational'], state['health'])
 
-            self.log("Loading power units...")
-            power_units = server.power_units()
-            i = 0
-            for power_supply, state in power_units.iteritems():
-                i+=1
-                self.log("Storing power unit %u/%u..."%(i,len(power_units)))
-                self.db.store_power_unit(server.host, power_supply, state['operational'], state['health'])
+        self.log.debug("Loading temperature of %s...", server.host)
+        temp_sensors = server.temp_sensors()
+        i = 0
+        for sensor, reading in temp_sensors.iteritems():
+            i+=1
+            self.log.debug("Storing temperature sensor %u/%u of %s...", i, len(temp_sensors), server.host)
+            self.db.store_temperature(server.host, sensor, reading)
 
-            self.log("Loading temperature...")
-            temp_sensors = server.temp_sensors()
-            i = 0
-            for sensor, reading in temp_sensors.iteritems():
-                i+=1
-                self.log("Storing temperature sensor %u/%u..."%(i,len(temp_sensors)))
-                self.db.store_temperature(server.host, sensor, reading)
-
-            self.log("Finished checking %s"%server.host)
+        self.log.info("Finished checking %s", server.host)
 
     def main_loop(self):
         self.loop = True
         try:
             while self.loop:
-                self.store_data()
+
+                t0 = time.time()
+
+                threads = []
+                for server in self.servers:
+                    t = threading.Thread(target=self.store_data, args=(server,))
+                    t.start()
+                    threads.append(t)
+
+                for t in threads:
+                    t.join()
+
+                t = time.time()
+                dt = t-t0
+                wait = 60-dt
+
+                # wait until next minute
+                self.log.debug("Waiting %u seconds...", wait)
+                time.sleep(wait)
+                
         except KeyboardInterrupt:
-            self.log("Interrupt detected, exiting")
+            self.log.info("Interrupt detected, exiting")
             self.loop = False
 
 if __name__ == '__main__':
     contr = ILoController()
-    contr.set_logging(stdout)
-
-    contr.add_server('pl-byd-esxi13-ilo', 'Administrator', 'ChangeMe')
-
     contr.main_loop()

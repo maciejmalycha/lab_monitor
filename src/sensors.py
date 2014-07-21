@@ -19,19 +19,42 @@ class ILoSSHClient(paramiko.SSHClient):
 class SSHiLoSensors:
 
     def __init__(self, host="pl-byd-esxi13-ilo", user="Administrator", password="ChangeMe"):
-        """Establishes connection with the iLo server"""
         self.host = host
+        self.user = user
+        self.password = password
+
         self.ssh = ILoSSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self.ssh.connect(host, username=user, password=password)
+        self.connect()
+        self.detect_components()
+    
+    def connect(self):
+        """Establishes connection with the iLo server"""
+        self.ssh.connect(self.host, username=self.user, password=self.password)
 
-    def show(self, component):
+    def detect_components(self):
+        """Loads all the power supplies and temperature sensors that will be monitored"""
+        system = self.show("/system1", False)
+
+        self.sensors = ["/system1/%s"%a for a in re.findall("    (sensor\d)", system)]
+        self.power_supplies = ["/system1/%s"%a for a in re.findall("    (powersupply\d)", system)]
+
+    def show(self, component, autoparse=True):
         """Executes `show` command on the remote server and parses the output as a dictionary"""
+
+        # it might have disconnected
+        if not self.ssh.get_transport().is_authenticated():
+            self.connect()
+
         cmd = "show "+component
         stdin,stdout,stderr = self.ssh.exec_command(cmd)
         output = stdout.read()
         time.sleep(0.01) # otherwise, if executed in a loop, the program throws paramiko.ssh_exception.SSHException: Unable to open channel
-        return dict(re.findall("    (\w+)=([^\r]+)", output))
+
+        if autoparse:
+            return dict(re.findall("    (\w+)=([^\r]+)", output))
+        else:
+            return output
 
     def server_status(self):
         """Checks server status"""
@@ -51,9 +74,8 @@ class SSHiLoSensors:
     def power_units(self):
         """ Returns health states and operational statuses of all power supplies"""
         data = {}
-        units = ["/system1/powersupply%u"%i for i in range(1,3)]
 
-        for component in units:
+        for component in self.power_supplies:
             response = self.show(component)
             data[response['ElementName']] = {
                 'operational': response['OperationalStatus'],
@@ -65,10 +87,10 @@ class SSHiLoSensors:
     def temp_sensors(self):
         """Returns current readings of all temperature sensors"""
         data = {}
-        sensors = ["/system1/sensor%u"%i for i in range(3,10)]
 
-        for component in sensors:
+        for component in self.sensors:
             response = self.show(component)
-            data[response['ElementName']] = int(response['CurrentReading'])
+            if response['CurrentReading'] != 'N/A':
+                data[response['ElementName']] = int(response['CurrentReading'])
             
         return data
