@@ -135,7 +135,7 @@ class DAO:
         if engine:
             self.engine = engine
         else:
-            self.engine = create_engine(db)
+            self.engine = create_engine(self.DB)
 
         Session.configure(bind=self.engine)
 
