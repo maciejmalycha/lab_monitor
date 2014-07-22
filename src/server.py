@@ -8,6 +8,17 @@ class ESXiHypervisor:
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh.connect(hostname, username=username, password=password)
 
+    def check_vmwaretools(self, vmid):
+        stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/get.summary {0} | grep toolsVersionStatus | awk {{'print $3'}}".format(vmid))
+        output = stdout.read().split()
+        if output:
+            output = filter(lambda c: c.isalpha(), output[0])
+            if output == "guestToolsNotInstalled":
+                return False
+            elif output == "guestToolsCurrent" or output == "guestToolsNeedUpgrade":
+                return True
+        return False
+
     def get_status(self, vmid):
         stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.getstate {0} | tail -1 | awk '{{print $2}}'".format(vmid))
         output = stdout.read().strip('\n')
@@ -26,6 +37,7 @@ class ESXiHypervisor:
             time.sleep(0.5)
         if forced:
             out = self.force_shutdown_vm(vmid)
+            print out.read()
             return True
         else:
             print "Error occurred. Status didn't change after elapsed time."
@@ -53,8 +65,11 @@ class ESXiHypervisor:
             if VMSL[vmid]:
                 AVMSL.append(vmid)
         for i in AVMSL:
-            if self.get_status(int(i)):
+            if self.check_vmwaretools(int(i)) == False:
+                print "vmWareTools not installed on vm id=",i," Can't perform shutdown"
+            else:
                 err = self.shutdown_vm(int(i))
+                err.read()
                 print "Shutting down VM: ", i
         start = time.time()
         elapsed = time.time()
@@ -83,8 +98,12 @@ class ESXiHypervisor:
             if VMSL[vmid]:
                 AVMSL.append(vmid)
         for i in AVMSL:
-            if self.get_status(int(i)):
+            if self.check_vmwaretools(int(i)) == False:
+                print "vmWareTools not installed on vm id=",i," Performing force_shutdown()"
+                out = self.force_shutdown_vm(int(i))
+            else:
                 err = self.shutdown_vm(int(i))
+                err.read()
                 print "Shutting down VM: ", i
         start = time.time()
         elapsed = time.time()
@@ -95,11 +114,13 @@ class ESXiHypervisor:
                     print "VMID down: ", i
                     AVMSL.remove(i)
             elapsed = time.time()
+            time.sleep(0.5)
         if AVMSL:
             print "Shutdown failed. There are still working machines."
             print "Forcing shutdown..."
             for i in AVMSL:
                 out = self.force_shutdown_vm(int(i))
+                out.read()
             print "All done. Powering off"
             return True
         #self.ssh.exec_command("/sbin/shutdown.sh")
@@ -115,7 +136,7 @@ class ESXiHypervisor:
             return False
         return True
 
-    def execute_shutdown_vm(self, VM_id, timeout = 0, forced = False):
+    def execute_shutdown_vm(self, VM_id, timeout=0, forced=False):
         res = self.shutdown_vm(VM_id)
         if res == False:
             if forced:
@@ -147,5 +168,3 @@ class ESXiVirtualMachine:
     #Force shutting down of a VM
     def force_shutdown(self):
         return self.hESXiHypervisor.force_shutdown_vm(self.id)
-
-

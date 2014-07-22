@@ -5,6 +5,7 @@ import argparse
 def status(args):
     hypervisor = server.ESXiHypervisor(args.address, "root", "ChangeMe")
     print "Getting status of ESXi virtual machine", args.address, "ID=", args.vmid
+    print "Is vmWareTools installed?", hypervisor.check_vmwaretools(args.vmid)
     print hypervisor.get_status(args.vmid)
 
 def shutdown(args):
