@@ -33,10 +33,16 @@ class Server(Base):
     id_ = Column(Integer, primary_key=True)
     addr = Column(String(30))
     type_ = Column(String(30))
+    rack = Column(Integer)
+    size = Column(Integer)
+    position = Column(Integer)
 
-    def __init__(self, addr, type_):
+    def __init__(self, addr, type_, rack, size, position):
         self.addr = addr
         self.type_ = type_
+        self.rack = rack
+        self.size = size
+        self.position = position
 
 
 
@@ -114,15 +120,20 @@ class SensorsDAO:
         Base.metadata.create_all(self.engine)
         Session.configure(bind=self.engine)
 
-    def server_create(self, addr, type_):
+    def server_create(self, addr, type_, rack, size, position):
         """Adds a new server to monitor"""
         with session_scope() as session:
-            session.add(Server(addr, type_))
+            session.add(Server(addr, type_, rack, size, position))
 
     def server_list(self):
         """Returns all monitored servers as a list of dictionaries"""
         with session_scope() as session:
             return [{'addr':serv.addr, 'type':serv.type_} for serv in session.query(Server)]
+
+    def server_position(self, rack, position0, position1):
+        """Searches for servers on given position"""
+        with session_scope() as session:
+            return session.query(Server).filter(Server.rack==rack, between(Server.position, position0, position1), between(Server.position+Server.size-1, position0, position1)).count()
 
     def server_delete(self, id_=None, addr=None):
         with session_scope() as session:
@@ -158,7 +169,7 @@ class SensorsDAO:
         if end is None:
             end = datetime.now()
         if start is None:
-            start = end-timedelta(hours=1)
+            start = end-timedelta(days=7)
 
         with session_scope() as session:
             data = {'present':[], 'average':[], 'minimum':[], 'maximum':[]}
@@ -179,7 +190,7 @@ class SensorsDAO:
         if end is None:
             end = datetime.now()
         if start is None:
-            start = end-timedelta(hours=1)
+            start = end-timedelta(days=7)
 
         with session_scope() as session:
             data = defaultdict(list)

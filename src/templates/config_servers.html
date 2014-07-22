@@ -1,0 +1,109 @@
+{% extends 'config.html' %}
+
+{% block main %}
+
+<h3>Servers</h3>
+
+{% if servers %}
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Address</th>
+            <th>Type</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+{% for serv in servers %}
+        <tr>
+            <td>{{ serv['addr'] }}</td>
+            <td>{{ serv['type'] }}</td>
+            <td>
+                <a class="btn btn-sm btn-primary" href="{{ url_for('status', server=serv['addr']) }}"><i class="fa fa-bar-chart-o"></i></a>
+                <a class="btn btn-sm btn-info"><i class="fa fa-pencil"></i></a>
+                <a class="btn btn-sm btn-danger"><i class="fa fa-times"></i></a>
+            </td>
+        </tr>
+{% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">There are no servers defined!</div>
+{% endif %}
+
+<button class="btn btn-success" data-toggle="modal" data-target="#new-server-modal">New server</button>
+
+
+
+<!-- Modal -->
+<div class="modal fade" id="new-server-modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+<form action="{{ url_for('config_servers_create') }}" method="post">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
+        <h4 class="modal-title" id="myModalLabel">Add new server</h4>
+      </div>
+      <div class="modal-body">
+            <div class="form-group">
+                <label for="address">Network address:</label>
+                <input type="text" class="form-control" id="address" name="address">
+            </div>
+            <div class="form-group">
+                <label for="type">Type:</label>
+                <input type="text" class="form-control" id="type" name="type">
+            </div>
+            <div class="form-group">
+                <label for="rack">Rack:</label>
+                <select class="form-control" id="rack" name="rack">
+{% for i in range(7) %}
+                    <option value="{{ i }}">{{ i+1 }}</option>
+{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="size">Size:</label>
+                <select class="form-control" id="size" name="size">
+{% for i in range(5) %}
+                    <option value="{{ i+1 }}">{{ i+1 }} U</option>
+{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="position">Position:</label>
+                <input type="number" class="form-control" value="1" id="position" name="position" min="1" max="42">
+            </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+</form>
+  </div>
+</div>
+
+
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(function(){
+    $('#size').on('change', function(){
+        var size = parseInt($(this).val())
+        $('#position').attr('max', 43-size);
+    });
+    $('#position').on('change', function(){
+        var pos = parseInt($(this).val())
+        $('#size option').each(function(i,el){
+            var size = parseInt($(el).val());
+            if(pos+size>43)
+                $(el).prop('disabled', true);
+            else
+                $(el).prop('disabled', false);
+        });
+    });
+})
+</script>
+{% endblock %}

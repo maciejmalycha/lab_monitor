@@ -9,19 +9,21 @@ import sys
 
 class ILoController:
 
-    def __init__(self):
+    def __init__(self, db=None, log_handlers=[]):
         self.log = logging.getLogger('lab_monitor.controller.ILoController')
 
         self.log.setLevel(logging.DEBUG)
 
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        self.log.addHandler(ch)
+        for handler in log_handlers:
+            self.log.addHandler(handler)
 
         self.log.info("Initializing...")
 
-        self.db = SensorsDAO()
-        self.log.debug("Database opened")
+        if not db:
+            self.db = SensorsDAO()
+            self.log.debug("Database opened")
+        else:
+            self.db = db
 
         self.servers = []
         for serv in self.db.server_list():

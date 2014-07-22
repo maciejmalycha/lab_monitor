@@ -32,6 +32,10 @@ class SSHiLoSensors:
         """Establishes connection with the iLo server"""
         self.ssh.connect(self.host, username=self.user, password=self.password)
 
+    def disconnect(self):
+        """Disconnects from the iLo server"""
+        self.ssh.close()
+
     def detect_components(self):
         """Loads all the power supplies and temperature sensors that will be monitored"""
         system = self.show("/system1", False)
