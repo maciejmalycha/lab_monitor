@@ -1,8 +1,3 @@
-Highcharts.setOptions({
-    global : {
-        useUTC : false
-    }
-});
 
 function rackDiagram(ctx, map, url_template, rack) {
     var racks = 7;
@@ -13,6 +8,8 @@ function rackDiagram(ctx, map, url_template, rack) {
 
     var rack_width = parseInt(width/racks);
     var unit_height = parseInt(height/units);
+
+    ctx.clearRect(0,0,width,height);
 
     map.empty();
 
@@ -37,16 +34,17 @@ function rackDiagram(ctx, map, url_template, rack) {
     }
 
     $.each(rack, function(i, server){
+
         var x = parseInt(server.rack*rack_width);
         var w = rack_width;
-        var y = parseInt(height-(server.size+server.pos)*unit_height);
+        var y = parseInt(height-(server.size+server.position-1)*unit_height);
         var h = server.size*unit_height;
 
         map.append(
             $('<area>').attr('shape', 'rect')
                 .attr('coords', [x,y,x+w,y+h].join(','))
-                .attr('href', url_template.replace(/_/, server.name))
-                .attr('title', server.name)
+                .attr('href', url_template.replace(/_/, server.addr))
+                .attr('title', server.addr)
         )
 
         // server shape
@@ -78,7 +76,7 @@ function rackDiagram(ctx, map, url_template, rack) {
         ctx.textAlign = 'left';
         ctx.fillStyle = '#fff';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(server.name, x+10, y+h);
+        ctx.fillText(server.addr, x+10, y+h-2);
         ctx.closePath();
 
         // temperature
@@ -87,13 +85,21 @@ function rackDiagram(ctx, map, url_template, rack) {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#fff';
         ctx.textBaseline = 'hanging';
-        ctx.fillText(server.temp+'°', x+rack_width/2, y+3);
+        ctx.fillText(server.temperature+'°', x+rack_width/2, y+3);
         ctx.closePath();
 
     });
 }
 
 function drawChart(url, area){
+
+    Highcharts.setOptions({
+        global : {
+            useUTC : false
+        }
+    });
+
+
     var series_data = [];
     $.getJSON(url, function(r){
         $.each(r, function(name, data){
@@ -134,5 +140,52 @@ function drawChart(url, area){
             },
             series: series_data
         })
+    }).fail(function(){
+        $(area).html('<div class="alert alert-danger">Failed to load data! Please try again later.</div>');
     })
 }
+
+$(function(){
+    $('[data-confirm]').on('click', function(e){
+
+        e.preventDefault();
+        clone = $(this).clone()
+            .removeData('confirm')
+            .attr('class', 'btn btn-danger')
+            .html('OK');
+
+        var confirm_text = $(this).data('confirm')
+
+        var modal = $('<div class="modal fade">')
+            .append(
+                $('<div class="modal-dialog">')
+                    .append(
+                        $('<div class="modal-content">')
+                            .append(
+                                $('<div class="modal-header">')
+                                    .append(
+                                        $('<button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>')
+                                    )
+                                    .append(
+                                        $('<h4 class="modal-title">Confirm</h4>')
+                                    )
+                            )
+                            .append(
+                                $('<div class="modal-body">')
+                                    .html(confirm_text)
+                            )
+                            .append(
+                                $('<div class="modal-footer">')
+                                    .append(
+                                        $('<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>')
+                                    )
+                                    .append(
+                                        clone
+                                    )
+                            )
+                    )
+            );
+        $('body').append(modal);
+        modal.modal('show');
+    });
+});
