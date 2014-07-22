@@ -43,7 +43,7 @@ class SSHiLoSensors:
         self.sensors = ["/system1/%s"%a for a in re.findall("    (sensor\d)", system)]
         self.power_supplies = ["/system1/%s"%a for a in re.findall("    (powersupply\d)", system)]
 
-    def show(self, component, autoparse=True):
+    def show(self, component, autoparse=True, original=False):
         """Executes `show` command on the remote server and parses the output as a dictionary"""
 
         cmd = "show "+component
@@ -56,12 +56,14 @@ class SSHiLoSensors:
             except paramiko.SSHException:
                 self.connect()
 
-
         output = stdout.read()
         time.sleep(0.01) # otherwise, if executed in a loop, the program throws paramiko.ssh_exception.SSHException: Unable to open channel
 
         if autoparse:
-            return dict(re.findall("    (\w+)=([^\r]+)", output))
+            if original:
+                return dict(re.findall("    (\w+)=([^\r]+)", output)), output
+            else:
+                return dict(re.findall("    (\w+)=([^\r]+)", output))
         else:
             return output
 
@@ -72,13 +74,17 @@ class SSHiLoSensors:
 
     def power_use(self):
         """Returns power usage"""
-        response = self.show("/system1")
-        return {
-            'present': int(response['oemhp_PresentPower'].split()[0]),
-            'avg': int(response['oemhp_AveragePower'].split()[0]),
-            'min': int(response['oemhp_MinPower'].split()[0]),
-            'max': int(response['oemhp_MaxPower'].split()[0])
-        }
+        response,text = self.show("/system1", original=True)
+        try:
+            return {
+                'present': int(response['oemhp_PresentPower'].split()[0]),
+                'avg': int(response['oemhp_AveragePower'].split()[0]),
+                'min': int(response['oemhp_MinPower'].split()[0]),
+                'max': int(response['oemhp_MaxPower'].split()[0])
+            }
+        except KeyError:
+            # I hope we'll discover the cause of the KeyError
+            print text
 
     def power_units(self):
         """ Returns health states and operational statuses of all power supplies"""

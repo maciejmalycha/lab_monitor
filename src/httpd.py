@@ -9,7 +9,7 @@ servers_dao, sensors_dao = get_daos()
 
 app = Flask(__name__)
 app.debug = True
-app.jinja_env.filters['unsafe'] = lambda v: Markup(v)
+app.jinja_env.filters['unsafejson'] = lambda v: json.dumps(v)
 subscriptions = []
 
 @app.route('/')
@@ -71,7 +71,7 @@ def config_servers():
 @app.route('/config/servers/create', methods=['POST'])
 def config_servers_create():
     try:
-        address = request.form['address']
+        addr = request.form['addr']
         type_ = request.form['type']
         rack = int(request.form['rack'])
         size = int(request.form['size'])
@@ -90,25 +90,24 @@ def config_servers_create():
             raise ValueError("Server does not fit")
 
         # are there any other servers on this place?
-        #if servers_dao.server_position(rack, position, position+size-1):
-        #    raise ValueError("There is a server on this place")
+        if servers_dao.server_position(rack, position, position+size-1):
+            raise ValueError("There is a server on this place")
 
         # is this host reachable?
         # (it takes the most time, so it's better to check other conditions first)
-        sensor = SSHiLoSensors(address)
+        sensor = SSHiLoSensors(addr)
         sensor.disconnect()
 
-        servers_dao.server_create(address, type_, rack, size, position)
+        servers_dao.server_create(addr, type_, rack, size, position)
         return redirect(url_for('config_servers'))
 
     except BaseException as e:
-        print e
-        return str(e)
+        return jsonify(error=str(e))
 
 @app.route('/config/servers/update/', methods=['POST'])
 def config_servers_update():
     try:
-        address = request.form['address']
+        addr = request.form['addr']
         type_ = request.form['type']
         rack = int(request.form['rack'])
         size = int(request.form['size'])
@@ -127,20 +126,15 @@ def config_servers_update():
             raise ValueError("Server does not fit")
 
         # are there any other servers on this place?
-        #if servers_dao.server_position(rack, position, position+size-1, address):
-        #    raise ValueError("There is a server on this place")
+        if servers_dao.server_position(rack, position, position+size-1, addr):
+            raise ValueError("There is a server on this place")
 
-        # is this host reachable?
-        # (it takes the most time, so it's better to check other conditions first)
-        sensor = SSHiLoSensors(address)
-        sensor.disconnect()
 
-        servers_dao.server_update(addr=address, update={'type_':type_, 'rack':rack, 'size':size, 'position':position})
+        servers_dao.server_update(addr=addr, update={'type_':type_, 'rack':rack, 'size':size, 'position':position})
         return redirect(url_for('config_servers'))
 
     except BaseException as e:
-        print e
-        return str(e)
+        return jsonify(error=str(e))
 
 @app.route('/config/servers/delete/<server>')
 def config_servers_delete(server):
@@ -149,8 +143,7 @@ def config_servers_delete(server):
         return redirect(url_for('config_servers'))
 
     except BaseException as e:
-        print e
-        return str(e)
+        return jsonify(error=str(e))
 
 
 @app.route('/shutdown')
@@ -160,7 +153,7 @@ def shutdown():
 
 @app.route('/json/servers')
 def json_servers():
-    servers = servers_dao.server_list(True)
+    servers = servers_dao.server_list(with_health=True)
     return jsonify(servers=servers)
 
 @app.route('/json/server/<server>/temperature')

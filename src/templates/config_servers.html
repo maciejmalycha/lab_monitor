@@ -20,7 +20,7 @@
             <td>{{ serv['type'] }}</td>
             <td class="actions">
                 <a class="btn btn-sm btn-primary" href="{{ url_for('status', server=serv['addr']) }}" title="Monitor"><i class="fa fa-bar-chart-o"></i></a>
-                <a class="btn btn-sm btn-info" title="Edit" data-edit=""><i class="fa fa-pencil"></i></a>
+                <a class="btn btn-sm btn-info" title="Edit" data-edit="{{serv|unsafejson}}"><i class="fa fa-pencil"></i></a>
                 <a href="{{ url_for('config_servers_delete', server=serv['addr']) }}" class="btn btn-sm btn-danger" title="Delete" data-confirm="Do you really want to delete this server?"><i class="fa fa-times"></i></a>
             </td>
         </tr>
@@ -38,16 +38,18 @@
 {% for modal,txt in [('create', "Add new server"), ('update', "Edit server")] %}
 <div class="modal fade" id="{{modal}}-server-modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
   <div class="modal-dialog">
-<form action="{{ url_for('config_servers_%s'%modal) }}" method="post">
+<form action="{{ url_for('config_servers_%s'%modal) }}" method="post" id="{{modal}}-server-form">
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
         <h4 class="modal-title" id="myModalLabel">{{txt}}</h4>
       </div>
       <div class="modal-body">
+            <div class="errors"></div>
+
             <div class="form-group">
-                <label for="{{modal}}-address">Network address:</label>
-                <input type="text" class="form-control" id="{{modal}}-address" name="address"{{' disabled'|safe if modal=='update' else ''}}>
+                <label for="{{modal}}-addr">Network address:</label>
+                <input type="text" class="form-control" id="{{modal}}-addr" name="addr"{{' readonly'|safe if modal=='update' else ''}}>
             </div>
             <div class="form-group">
                 <label for="{{modal}}-type">Type:</label>
@@ -75,8 +77,9 @@
             </div>
       </div>
       <div class="modal-footer">
+        <span class="wait pull-left"><i class="fa fa-spinner fa-spin"></i> saving...</span>
         <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary">OK</button>
+        <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </div>
 </form>
@@ -92,6 +95,16 @@
 <script>
 $(function(){
     $('.actions a').tooltip();
+    $('#create-server-form, #update-server-form').ajaxSubmit();
+    $('.wait').hide();
+
+    $('[data-edit]').on('click', function(){
+        data = $(this).data('edit');
+        $.each(data, function(k,v){
+            $('#update-'+k).val(v);
+        });
+        $('#update-server-modal').modal('show');
+    });
 
     $('.size-field').on('change', function(){
         var size = parseInt($(this).val())

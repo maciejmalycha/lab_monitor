@@ -1,3 +1,32 @@
+$.fn.ajaxSubmit = function() {
+    $(this).on('submit', function(e){
+        e.preventDefault();
+        var action = $(this).attr('action') || document.location.href;
+        var method = $(this).attr('method').toUpperCase() || 'GET';
+        var fields = $(this).serialize();
+        var errors = $(this).find('.errors');
+        var loader = $(this).find('.wait');
+
+        loader.fadeIn('fast');
+        $.ajax({
+            url: action,
+            type: method,
+            data: fields,
+            success: function(data) {
+                loader.fadeOut('fast');
+                if(typeof data.error!='undefined')
+                {
+                    var err = $('<div class="alert alert-danger">').html(data.error).hide().slideDown();
+                    errors.append(err);
+                    setTimeout(function(){err.slideUp()}, 3000);
+                }
+                else
+                    window.location.reload();
+        }
+        });
+    });
+}
+
 
 function rackDiagram(ctx, map, url_template, rack) {
     var racks = 7;
@@ -136,7 +165,11 @@ function drawChart(url, area){
                     type: 'all',
                     text: 'All'
                 }],
-                inputEnabled: false
+                inputEnabled: false,
+                selected: 0
+            },
+            legend: {
+                enabled: true
             },
             series: series_data
         })
