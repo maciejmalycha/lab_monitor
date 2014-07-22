@@ -13,6 +13,25 @@ class ESXiHypervisor:
         output = stdout.read().strip('\n')
         return (output == "on")
 
+    def wait_for_shutdown(self, timeout, vmid, forced):
+        print "lets start a timer"
+        start = time.time()
+        elapsed = time.time()
+        while (elapsed - start) < timeout:
+            status = self.get_status(vmid)
+            if status == False:
+                return True
+            elapsed = time.time()
+            print "Actual running time:", (elapsed - start)
+            time.sleep(0.5)
+        if forced:
+            out = self.force_shutdown_vm(vmid)
+            return True
+        else:
+            print "Error occurred. Status didn't change after elapsed time."
+            return False
+    
+
     #IDs of VMs are stored in an array, then we loop over IDs and get their statuses
     #If status is 'on', then we shutdown the VM and we add the ID to the list of IDs that are already shutted down by us
     def status(self):
@@ -26,70 +45,90 @@ class ESXiHypervisor:
         return VMSL
 
     #Shutting down every working VM
-    #TODO: Algorytm w skrypcie byl inny:
-    #      1. Wez liste wszystkich aktywnych VM
-    #      2. Wydaj kazdemu z nich polecenie power.shutdown
-    #      3. Sprawdzaj ich status dopoki wszystkie sie nie wylacza
-    # Dodatkowo mozna wprowadzic wykrywanie czy sa zainstalowane VMWare tools
-    # i dodac timeout po ktorym komenda zwroci blad o ile wszystkie maszyny sie
-    # nie zamkna.
-    def shutdown(self):
+    def shutdown(self, timeout):
         VMSL = self.status()
         VMidSL = VMSL.keys()
         AVMSL = []
         for vmid in VMidSL:
             if VMSL[vmid]:
                 AVMSL.append(vmid)
-        while AVMSL:
+        for i in AVMSL:
+            if self.get_status(int(i)):
+                err = self.shutdown_vm(int(i))
+                print "Shutting down VM: ", i
+        start = time.time()
+        elapsed = time.time()
+        while (elapsed - start) < timeout and AVMSL:
             print "Active VMs: ", AVMSL
             for i in AVMSL:
-                if self.get_status(int(i)):
-                    err = self.shutdown_VirtualMachine(int(i))
-                    time.sleep(5)
-                    if err.read():
-                        return "ERROR"
-                else:
+                if self.get_status(int(i)) == False:
                     print "VMID down: ", i
                     AVMSL.remove(i)
-        print "All done. Powering off"
+            elapsed = time.time()
+            time.sleep(0.5)
+        if AVMSL:
+            print "Shutdown failed. There are still working machines."
+            return False
+        else:
+            print "All done. Powering off"
+            return True
         # self.ssh.exec_command("/sbin/shutdown.sh")
         # self.ssh.exec_command("/sbin/poweroff")
-    #Shutting down the hypervisor
-    #TODO: Force shutdown powinno dzialac podobnie jak shutdown. Z tym, ze powinno
-    #      zamknac maszyne nawet w przypadku gdy nie ma tooli lub wystapil timeout
-    #      Jesli toole sa i timeout nie wystapil, dzialanie nie powinno sie roznic
-    #      od shutdown()
-    def force_shutdown(self):
+
+    def force_shutdown(self, timeout):
         VMSL = self.status()
         VMidSL = VMSL.keys()
         AVMSL = []
         for vmid in VMidSL:
             if VMSL[vmid]:
                 AVMSL.append(vmid)
-        while AVMSL:
+        for i in AVMSL:
+            if self.get_status(int(i)):
+                err = self.shutdown_vm(int(i))
+                print "Shutting down VM: ", i
+        start = time.time()
+        elapsed = time.time()
+        while (elapsed - start) < timeout and AVMSL:
             print "Active VMs: ", AVMSL
             for i in AVMSL:
-                if self.get_status(int(i)):
-                    err = self.shutdown_VirtualMachine(int(i))
-                    print "Shutting down VM: ", i
-                    time.sleep(5)
-                    # print err.read()
-                    if err.read() != "":
-                        print "Forcing shutdown vm: ", int(i)
-                        self.force_shutdown_VirtualMachine(int(i))
-                else:
+                if self.get_status(int(i)) == False:
                     print "VMID down: ", i
                     AVMSL.remove(i)
-        print "All done. Powering off"
+            elapsed = time.time()
+        if AVMSL:
+            print "Shutdown failed. There are still working machines."
+            print "Forcing shutdown..."
+            for i in AVMSL:
+                out = self.force_shutdown_vm(int(i))
+            print "All done. Powering off"
+            return True
         #self.ssh.exec_command("/sbin/shutdown.sh")
         #self.ssh.exec_command("/sbin/poweroff")
 
-    def force_shutdown_VirtualMachine(self, VM_id):
+    def force_shutdown_vm(self, VM_id):
         stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.off {0}".format(VM_id))
-        return stdout
-    def shutdown_VirtualMachine(self, VM_id):
+        return stdout.read()
+
+    def shutdown_vm(self, VM_id):
         stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/power.shutdown {0}".format(VM_id))
-        return stderr
+        if stderr.read() != "":
+            return False
+        return True
+
+    def execute_shutdown_vm(self, VM_id, timeout = 0, forced = False):
+        res = self.shutdown_vm(VM_id)
+        if res == False:
+            if forced:
+                print "Forcing a shutdown vm id=", VM_id
+                out = self.force_shutdown_vm(VM_id)
+                return out
+            print "Shutting down failed."
+            return False
+        else:
+            if timeout > 0:
+                res = self.wait_for_shutdown(timeout, VM_id, forced)
+                return False
+            return True
 
 class ESXiVirtualMachine:
 
@@ -103,10 +142,10 @@ class ESXiVirtualMachine:
 
     #Shutting down a VM
     def shutdown(self):
-        return self.hypervisor.shutdown_VirtualMachine(self.id)
+        return self.hypervisor.shutdown_vm(self.id)
 
     #Force shutting down of a VM
     def force_shutdown(self):
-        return self.hypervisor.force_shutdown_VirtualMachine(self.id)
+        return self.hESXiHypervisor.force_shutdown_vm(self.id)
 
 
