@@ -148,13 +148,14 @@ class ServersDAO(DAO):
         with session_scope() as session:
             session.add(Server(addr, type_, rack, size, position))
 
-    def server_list(self, with_health=False):
+    def server_list(self, rack=None, with_health=False):
         """Returns all monitored servers as a list of dictionaries"""
         with session_scope() as session:
 
             data = []
 
-            for serv in session.query(Server):
+            q = session.query(Server).filter(Server.rack==rack if rack else True)
+            for serv in q:
                 row = {'addr':serv.addr, 'type':serv.type_, 'rack':serv.rack, 'size':serv.size, 'position':serv.position}
                 if with_health:
                     try:
@@ -178,7 +179,7 @@ class ServersDAO(DAO):
         """Searches for servers on given position"""
         with session_scope() as session:
             q = session.query(Server) \
-                .filter(Server.rack==rack, or_(Server.position<=position1, (Server.position+Server.size-1)<=position0), Server.address!=except_for if except_for else True)
+                .filter(Server.rack==rack, or_(Server.position<=position1, (Server.position+Server.size-1)<=position0), Server.addr!=except_for if except_for else True)
             print str(q)
             return q.count()
 
@@ -198,8 +199,15 @@ class ServersDAO(DAO):
             elif addr is not None:
                 serv = session.query(Server).filter(Server.addr==addr)[0]
 
-            for field, new in update.iteritems:
+            for field, new in update.iteritems():
                 setattr(serv, field, new)
+
+    def get_laboratory(self):
+        pass
+
+    def get_rack(self, no):
+        pass
+
 
 class SensorsDAO(DAO):
 
