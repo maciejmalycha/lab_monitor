@@ -46,12 +46,17 @@ class SSHiLoSensors:
     def show(self, component, autoparse=True):
         """Executes `show` command on the remote server and parses the output as a dictionary"""
 
-        # it might have disconnected
-        if not self.ssh.get_transport().is_authenticated():
-            self.connect()
-
         cmd = "show "+component
-        stdin,stdout,stderr = self.ssh.exec_command(cmd)
+
+        success = False
+        while not success:
+            try:
+                stdin,stdout,stderr = self.ssh.exec_command(cmd)
+                success = True
+            except paramiko.SSHException:
+                self.connect()
+
+
         output = stdout.read()
         time.sleep(0.01) # otherwise, if executed in a loop, the program throws paramiko.ssh_exception.SSHException: Unable to open channel
 
