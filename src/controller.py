@@ -7,15 +7,28 @@ import logging
 import threading
 import sys
 
+import gevent
+from gevent import monkey
+
+monkey.patch_all()
+
+STATECHANGE = 9
+logging.addLevelName(STATECHANGE, 'STATECHANGE')
+
 class ILoController:
 
     def __init__(self, log_handlers=[]):
+        self.state = 'starting...'
+        self.sleep = None
+
         self.log = logging.getLogger('lab_monitor.controller.ILoController')
-
-        self.log.setLevel(logging.DEBUG)
-
         for handler in log_handlers:
             self.log.addHandler(handler)
+        self.log.setLevel(STATECHANGE)
+        
+
+        self.update_state('starting...')
+
 
         self.log.info("Initializing...")
 
@@ -35,7 +48,10 @@ class ILoController:
 
         if len(self.servers) == 0:
             self.log.info("Nothing to monitor, exiting")
-            sys.exit()
+
+    def update_state(self, state):
+        self.state = state
+        self.log.log(STATECHANGE, self.state)
 
     def store_data(self, server):
         self.log.info("Checking %s...", server.host)
@@ -75,6 +91,8 @@ class ILoController:
 
                 t0 = time.time()
 
+                self.update_state('working')
+
                 threads = []
                 for server in self.servers:
                     t = threading.Thread(target=self.store_data, args=(server,))
@@ -88,13 +106,30 @@ class ILoController:
                 dt = t-t0
                 wait = 60-dt
 
-                # wait until next minute
-                self.log.debug("Waiting %u seconds...", wait)
-                time.sleep(wait)
+                self.update_state('idle')
+
+                # wait until next minute, unless it's time to finish
+                if self.loop:
+                    self.log.debug("Waiting %u seconds...", wait)
+                    self.sleep = gevent.spawn(time.sleep, wait)
+                    self.sleep.join()
+
+            self.update_state('off')
+            self.log.info("Exiting")
+            return True
                 
         except KeyboardInterrupt:
-            self.log.info("Interrupt detected, exiting")
+            self.log.info("Interrupt detected")
             self.loop = False
+
+    def stop(self):
+        if self.loop:
+            self.log.info("Stop called")
+            self.loop = False
+            if self.sleep is not None:
+                self.sleep.kill()
+        else:
+            self.log.info("Already outside main loop")
 
 if __name__ == '__main__':
     ch = logging.StreamHandler()

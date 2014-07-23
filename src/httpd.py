@@ -4,25 +4,24 @@ from database import *
 from sensors import SSHiLoSensors
 from controller import ILoController
 
+import ssehandler
+import gevent
+from gevent.wsgi import WSGIServer
+
 
 servers_dao, sensors_dao = get_daos()
 
 app = Flask(__name__)
 app.debug = True
 app.jinja_env.filters['unsafejson'] = lambda v: json.dumps(v)
-subscriptions = []
+controller_inst = None
+controller_gevent = None
+handler = ssehandler.SSEHandler()
 
 @app.route('/')
 def dashboard():
     servers = servers_dao.server_list()
-    servers_layout = [
-        [
-            (0, 1, 'pl-byd-esxi10-ilo'),
-            (12, 5, 'pl-byd-esxi12-ilo'),
-        ],
-        [],[],[],[],[],[]
-    ]
-    return render_template('dashboard.html', servers=servers, servers_layout=servers_layout)
+    return render_template('dashboard.html', servers=servers)
 
 
 @app.route('/status')
@@ -146,6 +145,54 @@ def config_servers_delete(server):
         return jsonify(error=str(e))
 
 
+@app.route('/controller')
+def controller():
+    servers = servers_dao.server_list()
+    return render_template('controller.html', servers=servers)
+
+@app.route("/controller/stream")
+def controller_stream():
+    return Response(handler.subscribe(), mimetype="text/event-stream")
+
+@app.route("/controller/start")
+def controller_start():
+    global controller_gevent
+
+    def run():
+        global controller_inst
+        global handler
+        controller_inst = ILoController([handler])
+        controller_inst.main_loop()
+
+    if controller_inst is None:
+        controller_gevent = gevent.spawn(run)
+    return "Going"
+
+@app.route("/controller/stop")
+def controller_stop():
+    global controller_inst
+    if controller_inst is not None:
+        controller_inst.stop()
+
+        def stop():
+            global controller_gevent
+            global controller_inst
+            controller_gevent.join()
+            controller_inst = None
+
+        gevent.spawn(stop)
+
+    return "Stopped"
+
+@app.route("/controller/status")
+def controller_status():
+    global controller_inst
+    if controller_inst is not None:
+        return controller_inst.state
+    else:
+        return "not started"
+
+
 @app.route('/shutdown')
 def shutdown():
     return ''
@@ -185,6 +232,11 @@ def json_status(server):
     data = sensors_dao.get_status(server, start, end)
     return jsonify(**data)
 
+if __name__ == "__main__":
+    app.debug = True
+    server = WSGIServer(("", 5000), app)
+    server.serve_forever()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+
+#if __name__ == '__main__':
+#    app.run(host='0.0.0.0')

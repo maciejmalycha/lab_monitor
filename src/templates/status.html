@@ -27,7 +27,7 @@ $(function() {
         drawChart('{{ url_for(data_src, server=server) }}', '#graph');
     }
     chart();
-    setInterval(chart, 30000);
+    stream.onupdated.push(chart);
 });
 </script>
 {% endblock %}
