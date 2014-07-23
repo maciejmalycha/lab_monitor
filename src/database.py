@@ -154,7 +154,7 @@ class ServersDAO(DAO):
 
             data = []
 
-            q = session.query(Server).filter(Server.rack==rack if rack else True)
+            q = session.query(Server).filter(Server.rack==rack if rack is not None else True)
             for serv in q:
                 row = {'addr':serv.addr, 'type':serv.type_, 'rack':serv.rack, 'size':serv.size, 'position':serv.position}
                 if with_health:
