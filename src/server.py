@@ -1,9 +1,19 @@
 import paramiko
 import time
+import logging
+import database
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
-    def __init__(self, hostname , username, password):
+    def __init__(self, hostname , username="root", password="ChangeMe", log_handlers=[]):
+        self.addr = hostname
+        
+        self.log = logging.getLogger("lab_monitor.server.ESXiHypervisor")
+        self.log.setLevel(logging.DEBUG)
+        for handler in log_handlers:
+            self.log.addHandler(handler)
+        self.log.info("Connecting...")
+
         self.ssh = paramiko.SSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh.connect(hostname, username=username, password=password)
@@ -25,7 +35,7 @@ class ESXiHypervisor:
         return (output == "on")
 
     def wait_for_shutdown(self, timeout, vmid, forced):
-        print "lets start a timer"
+        #print "lets start a timer"
         start = time.time()
         elapsed = time.time()
         while (elapsed - start) < timeout:
@@ -33,14 +43,14 @@ class ESXiHypervisor:
             if status == False:
                 return True
             elapsed = time.time()
-            print "Actual running time:", (elapsed - start)
+            #print "Actual running time:", (elapsed - start)
             time.sleep(0.5)
         if forced:
             out = self.force_shutdown_vm(vmid)
-            print out.read()
+            self.log.debug(out.read())
             return True
         else:
-            print "Error occurred. Status didn't change after elapsed time."
+            self.log.error("Error occurred. Status didn't change after elapsed time.")
             return False
     
 
@@ -65,27 +75,27 @@ class ESXiHypervisor:
             if VMSL[vmid]:
                 AVMSL.append(vmid)
         for i in AVMSL:
-            if self.check_vmwaretools(int(i)) == False:
-                print "vmWareTools not installed on vm id=",i," Can't perform shutdown"
+            if not self.check_vmwaretools(int(i)):
+                self.log.warning("vmWareTools not installed on vm id=", i, " Can't perform shutdown")
             else:
                 err = self.shutdown_vm(int(i))
                 err.read()
-                print "Shutting down VM: ", i
+                self.log.info("Shutting down VM: ", i)
         start = time.time()
         elapsed = time.time()
         while (elapsed - start) < timeout and AVMSL:
-            print "Active VMs: ", AVMSL
+            self.log.info("Active VMs: ", AVMSL)
             for i in AVMSL:
                 if self.get_status(int(i)) == False:
-                    print "VMID down: ", i
+                    self.log.info("VMID down: ", i)
                     AVMSL.remove(i)
             elapsed = time.time()
             time.sleep(0.5)
         if AVMSL:
-            print "Shutdown failed. There are still working machines."
+            self.log.error("Shutdown failed. There are still working machines.")
             return False
         else:
-            print "All done. Powering off"
+            self.log.info("All done. Powering off")
             return True
         # self.ssh.exec_command("/sbin/shutdown.sh")
         # self.ssh.exec_command("/sbin/poweroff")
@@ -98,30 +108,29 @@ class ESXiHypervisor:
             if VMSL[vmid]:
                 AVMSL.append(vmid)
         for i in AVMSL:
-            if self.check_vmwaretools(int(i)) == False:
-                print "vmWareTools not installed on vm id=",i," Performing force_shutdown()"
+            if not self.check_vmwaretools(int(i)):
+                self.log.warning("vmWareTools not installed on vm id=",i," Performing force_shutdown()")
                 out = self.force_shutdown_vm(int(i))
             else:
                 err = self.shutdown_vm(int(i))
                 err.read()
-                print "Shutting down VM: ", i
+                self.log.info("Shutting down VM: ", i)
         start = time.time()
         elapsed = time.time()
         while (elapsed - start) < timeout and AVMSL:
-            print "Active VMs: ", AVMSL
+            self.log.info("Active VMs: ", AVMSL)
             for i in AVMSL:
                 if self.get_status(int(i)) == False:
-                    print "VMID down: ", i
+                    self.log.info("VMID down: ", i)
                     AVMSL.remove(i)
             elapsed = time.time()
             time.sleep(0.5)
         if AVMSL:
-            print "Shutdown failed. There are still working machines."
-            print "Forcing shutdown..."
+            self.log.info("Shutdown failed. There are still working machines. \nForcing shutdown...")
             for i in AVMSL:
                 out = self.force_shutdown_vm(int(i))
                 out.read()
-            print "All done. Powering off"
+            self.log.info("All done. Powering off")
             return True
         #self.ssh.exec_command("/sbin/shutdown.sh")
         #self.ssh.exec_command("/sbin/poweroff")
@@ -140,10 +149,10 @@ class ESXiHypervisor:
         res = self.shutdown_vm(VM_id)
         if res == False:
             if forced:
-                print "Forcing a shutdown vm id=", VM_id
+                self.log.info("Forcing a shutdown vm id=", VM_id)
                 out = self.force_shutdown_vm(VM_id)
                 return out
-            print "Shutting down failed."
+            self.log.warning("Shutting down failed.")
             return False
         else:
             if timeout > 0:
@@ -168,3 +177,71 @@ class ESXiVirtualMachine:
     #Force shutting down of a VM
     def force_shutdown(self):
         return self.hESXiHypervisor.force_shutdown_vm(self.id)
+
+class Rack:
+    def __init__(self, rackid, log_handlers=[]):
+        self.id = rackid
+
+        self.log = logging.getLogger("lab_monitor.server.Rack")
+        self.log.setLevel(logging.DEBUG)
+        for handler in log_handlers:
+            self.log.addHandler(handler)
+        self.log.info("Initialazing rack with id=", self.id)
+
+    def get_servers(self):
+        return database.ServersDAO().server_list(self.id)
+    
+    def get_hypervisors_ready(self):
+        hyper_list = []
+        FUKTHISHIT = self.get_servers()
+        for server in FUKTHISHIT:
+            addr = server['addr']
+            addr = addr[0:-4]   #just to remove sufix '-ilo'
+            hyper_list.append(ESXiHypervisor(addr))
+        return hyper_list
+        
+    def shutdown(self, timeout):
+        hyper_list = self.get_hypervisors_ready()
+        force_list = []
+        for hypervisor in hyper_list:
+            self.log.info("Initialazing shutdown on ", hypervisor.addr)
+            err = hypervisor.shutdown(timeout)
+            if err:
+                self.log.info("Everything went OK")
+            else:
+                self.log.error("Something went wrong. Error occurred.\nAdding hypervisor to force_list")
+                force_list.append(hypervisor)
+        return force_list if force_list else None
+
+    def force_shutdown(self, timeout):
+        hyper_list = self.get_hypervisors_ready()
+        for hypervisor in hyper_list:
+            self.log.info("Initialazing shutdown on ", hypervisor.addr)
+            err = hypervisor.shutdown(timeout)
+            if err:
+                self.log.info("Everything went OK")
+            else:
+                self.log.error("Something went wrong. Error occurred.\nInitialazing force_shutdown")
+                hypervisor.force_shutdown(timeout)
+
+class Laboratory:
+    def get_racks(self):
+        racks = []
+        for rackid in range(0,7):
+            racks.append(Rack(rackid))
+        return racks
+
+    def shutdown(self, timeout):
+        racks = self.get_racks()
+        for rack in racks:
+            rack.log.info("Initialazing shutdown on rack:", rack.id)
+            rack.shutdown(timeout)
+
+    def force_shutdown(self, timeout):
+        racks = self.get_racks()
+        for rack in racks:
+            rack.log.info("Initialazing shutdown on rack:", rack.id)
+            res = rack.shutdown(timeout)
+            if res is not None:
+                for hyp in res:
+                    hyp.force_shutdown(timeout)
