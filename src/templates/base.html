@@ -47,9 +47,9 @@
            </li>
            {% endif %}
            <li{{ ' class="active"'|safe if request.url_rule.endpoint.startswith('config') else '' }}><a href="{{ url_for('config') }}">Configuration</a></li>
-           <li{{ ' class="active"'|safe if 'shutdown'==request.url_rule.endpoint else '' }}><a href="{{ url_for('shutdown') }}">Shutdown</a></li>
+           <li{{ ' class="active"'|safe if 'shutdown'==request.url_rule.endpoint else '' }}><a href="{{ url_for('shutdown') }}" data-confirm="Do you really want to shutdown?">Shutdown</a></li>
          </ul>
-         <p class="navbar-text navbar-right">Updated at 18:53:25</p>
+         <!--<p class="navbar-text navbar-right">Updated at 18:53:25</p>-->
        </div><!--/.nav-collapse -->
      </div>
    </div>

@@ -10,7 +10,7 @@
         <tr>
             <th>Address</th>
             <th>Type</th>
-            <th>Actions</th>
+            <th class="actions">Actions</th>
         </tr>
     </thead>
     <tbody>
@@ -18,10 +18,10 @@
         <tr>
             <td>{{ serv['addr'] }}</td>
             <td>{{ serv['type'] }}</td>
-            <td>
-                <a class="btn btn-sm btn-primary" href="{{ url_for('status', server=serv['addr']) }}"><i class="fa fa-bar-chart-o"></i></a>
-                <a class="btn btn-sm btn-info"><i class="fa fa-pencil"></i></a>
-                <a class="btn btn-sm btn-danger"><i class="fa fa-times"></i></a>
+            <td class="actions">
+                <a class="btn btn-sm btn-primary" href="{{ url_for('status', server=serv['addr']) }}" title="Monitor"><i class="fa fa-bar-chart-o"></i></a>
+                <a class="btn btn-sm btn-info" title="Edit" data-edit=""><i class="fa fa-pencil"></i></a>
+                <a href="{{ url_for('config_servers_delete', server=serv['addr']) }}" class="btn btn-sm btn-danger" title="Delete" data-confirm="Do you really want to delete this server?"><i class="fa fa-times"></i></a>
             </td>
         </tr>
 {% endfor %}
@@ -31,47 +31,47 @@
 <div class="alert alert-info">There are no servers defined!</div>
 {% endif %}
 
-<button class="btn btn-success" data-toggle="modal" data-target="#new-server-modal">New server</button>
+<button class="btn btn-success" data-toggle="modal" data-target="#create-server-modal">New server</button>
 
 
 
-<!-- Modal -->
-<div class="modal fade" id="new-server-modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
+{% for modal,txt in [('create', "Add new server"), ('update', "Edit server")] %}
+<div class="modal fade" id="{{modal}}-server-modal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true">
   <div class="modal-dialog">
-<form action="{{ url_for('config_servers_create') }}" method="post">
+<form action="{{ url_for('config_servers_%s'%modal) }}" method="post">
     <div class="modal-content">
       <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>
-        <h4 class="modal-title" id="myModalLabel">Add new server</h4>
+        <h4 class="modal-title" id="myModalLabel">{{txt}}</h4>
       </div>
       <div class="modal-body">
             <div class="form-group">
-                <label for="address">Network address:</label>
-                <input type="text" class="form-control" id="address" name="address">
+                <label for="{{modal}}-address">Network address:</label>
+                <input type="text" class="form-control" id="{{modal}}-address" name="address"{{' disabled'|safe if modal=='update' else ''}}>
             </div>
             <div class="form-group">
-                <label for="type">Type:</label>
-                <input type="text" class="form-control" id="type" name="type">
+                <label for="{{modal}}-type">Type:</label>
+                <input type="text" class="form-control" id="{{modal}}-type" name="type">
             </div>
             <div class="form-group">
-                <label for="rack">Rack:</label>
-                <select class="form-control" id="rack" name="rack">
+                <label for="{{modal}}-rack">Rack:</label>
+                <select class="form-control" id="{{modal}}-rack" name="rack">
 {% for i in range(7) %}
                     <option value="{{ i }}">{{ i+1 }}</option>
 {% endfor %}
                 </select>
             </div>
             <div class="form-group">
-                <label for="size">Size:</label>
-                <select class="form-control" id="size" name="size">
+                <label for="{{modal}}-size">Size:</label>
+                <select class="form-control size-field" id="{{modal}}-size" name="size" data-position="#{{modal}}-position">
 {% for i in range(5) %}
                     <option value="{{ i+1 }}">{{ i+1 }} U</option>
 {% endfor %}
                 </select>
             </div>
             <div class="form-group">
-                <label for="position">Position:</label>
-                <input type="number" class="form-control" value="1" id="position" name="position" min="1" max="42">
+                <label for="{{modal}}-position">Position:</label>
+                <input type="number" class="form-control position-field" value="1" id="{{modal}}-position" name="position" data-size="#{{modal}}-size" min="1" max="42">
             </div>
       </div>
       <div class="modal-footer">
@@ -82,6 +82,7 @@
 </form>
   </div>
 </div>
+{% endfor %}
 
 
 
@@ -90,13 +91,15 @@
 {% block scripts %}
 <script>
 $(function(){
-    $('#size').on('change', function(){
+    $('.actions a').tooltip();
+
+    $('.size-field').on('change', function(){
         var size = parseInt($(this).val())
-        $('#position').attr('max', 43-size);
+        $($(this).data('position')).attr('max', 43-size);
     });
-    $('#position').on('change', function(){
+    $('.position-field').on('change', function(){
         var pos = parseInt($(this).val())
-        $('#size option').each(function(i,el){
+        $($(this).data('size')).find('option').each(function(i,el){
             var size = parseInt($(el).val());
             if(pos+size>43)
                 $(el).prop('disabled', true);

@@ -16,42 +16,19 @@
 
 {% block scripts %}
 <script>
-var canvas = $('#rack-diagram')[0];
-var ctx = canvas.getContext('2d');
+$(function(){
+    var canvas = $('#rack-diagram')[0];
+    var ctx = canvas.getContext('2d');
 
-rackDiagram(ctx, $('#servers-map'), '{{ url_for('status', server='_') }}', [
-    {
-        name: 'pl-byd-esxi11-ilo',
-        rack: 0,
-        size: 2,
-        pos: 0,
-        temp: 27,
-        power_supplies: [true, true]
-    },
-    {
-        name: 'pl-byd-esxi12-ilo',
-        rack: 0,
-        size: 2,
-        pos: 2,
-        temp: 28,
-        power_supplies: [false, true]
-    },
-    {
-        name: 'pl-byd-esxi13-ilo',
-        rack: 1,
-        size: 3,
-        pos: 1,
-        temp: 25,
-        power_supplies: [true, true]
-    },
-    /*{
-        name: 'pl-byd-esxi14-ilo',
-        rack: 4,
-        size: 1,
-        pos: 10,
-        temp: 26,
-        power_supplies: [true, true]
-    }*/
-]);
+    var diagram = function() {
+        $.getJSON('{{ url_for('json_servers') }}', function(d){
+            rackDiagram(ctx, $('#servers-map'), '{{ url_for('status', server='_') }}', d.servers);
+        });
+    }
+
+    diagram();
+    setInterval(diagram, 30000);
+    
+});
 </script>
 {% endblock %}

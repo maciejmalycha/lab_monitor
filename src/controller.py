@@ -1,6 +1,6 @@
 
 from sensors import SSHiLoSensors
-from database import SensorsDAO
+from database import *
 
 import time
 import logging
@@ -9,7 +9,7 @@ import sys
 
 class ILoController:
 
-    def __init__(self, db=None, log_handlers=[]):
+    def __init__(self, log_handlers=[]):
         self.log = logging.getLogger('lab_monitor.controller.ILoController')
 
         self.log.setLevel(logging.DEBUG)
@@ -19,14 +19,11 @@ class ILoController:
 
         self.log.info("Initializing...")
 
-        if not db:
-            self.db = SensorsDAO()
-            self.log.debug("Database opened")
-        else:
-            self.db = db
+        self.servers_dao, self.sensors_dao = get_daos()
+        self.log.debug("Database opened")
 
         self.servers = []
-        for serv in self.db.server_list():
+        for serv in self.servers_dao.server_list():
             try:
                 conn = SSHiLoSensors(serv['addr'])
             except Exception as e:
@@ -46,12 +43,12 @@ class ILoController:
         self.log.debug("Loading status of %s...", server.host)
         server_status = server.server_status()
         self.log.debug("Storing status of %s...", server.host)
-        self.db.store_server_status(server.host, server_status)
+        self.sensors_dao.store_server_status(server.host, server_status)
 
         self.log.debug("Loading power usage of %s...", server.host)
         power_use = server.power_use()
         self.log.debug("Storing power usage of %s...", server.host)
-        self.db.store_power_usage(server.host, power_use['present'], power_use['avg'], power_use['min'], power_use['max'])
+        self.sensors_dao.store_power_usage(server.host, power_use['present'], power_use['avg'], power_use['min'], power_use['max'])
 
         self.log.debug("Loading power units of %s...", server.host)
         power_units = server.power_units()
@@ -59,7 +56,7 @@ class ILoController:
         for power_supply, state in power_units.iteritems():
             i+=1
             self.log.debug("Storing power unit %u/%u of %s...", i, len(power_units), server.host)
-            self.db.store_power_unit(server.host, power_supply, state['operational'], state['health'])
+            self.sensors_dao.store_power_unit(server.host, power_supply, state['operational'], state['health'])
 
         self.log.debug("Loading temperature of %s...", server.host)
         temp_sensors = server.temp_sensors()
@@ -67,7 +64,7 @@ class ILoController:
         for sensor, reading in temp_sensors.iteritems():
             i+=1
             self.log.debug("Storing temperature sensor %u/%u of %s...", i, len(temp_sensors), server.host)
-            self.db.store_temperature(server.host, sensor, reading)
+            self.sensors_dao.store_temperature(server.host, sensor, reading)
 
         self.log.info("Finished checking %s", server.host)
 
@@ -100,5 +97,8 @@ class ILoController:
             self.loop = False
 
 if __name__ == '__main__':
-    contr = ILoController()
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.WARNING)
+
+    contr = ILoController(log_handlers=[ch])
     contr.main_loop()
