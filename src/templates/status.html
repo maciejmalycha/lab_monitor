@@ -23,7 +23,11 @@
 <script src="//code.highcharts.com/stock/highstock.js"></script>
 <script>
 $(function() {
- drawChart('{{ url_for(data_src, server=server) }}', '#graph');
+    var chart = function() {
+        drawChart('{{ url_for(data_src, server=server) }}', '#graph');
+    }
+    chart();
+    stream.onupdated.push(chart);
 });
 </script>
 {% endblock %}

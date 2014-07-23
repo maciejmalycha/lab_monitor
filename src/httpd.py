@@ -4,25 +4,24 @@ from database import *
 from sensors import SSHiLoSensors
 from controller import ILoController
 
+import ssehandler
+import gevent
+from gevent.wsgi import WSGIServer
+
 
 servers_dao, sensors_dao = get_daos()
 
 app = Flask(__name__)
 app.debug = True
-app.jinja_env.filters['unsafe'] = lambda v: Markup(v)
-subscriptions = []
+app.jinja_env.filters['unsafejson'] = lambda v: json.dumps(v)
+controller_inst = None
+controller_gevent = None
+handler = ssehandler.SSEHandler()
 
 @app.route('/')
 def dashboard():
     servers = servers_dao.server_list()
-    servers_layout = [
-        [
-            (0, 1, 'pl-byd-esxi10-ilo'),
-            (12, 5, 'pl-byd-esxi12-ilo'),
-        ],
-        [],[],[],[],[],[]
-    ]
-    return render_template('dashboard.html', servers=servers, servers_layout=servers_layout)
+    return render_template('dashboard.html', servers=servers)
 
 
 @app.route('/status')
@@ -71,7 +70,7 @@ def config_servers():
 @app.route('/config/servers/create', methods=['POST'])
 def config_servers_create():
     try:
-        address = request.form['address']
+        addr = request.form['addr']
         type_ = request.form['type']
         rack = int(request.form['rack'])
         size = int(request.form['size'])
@@ -90,25 +89,24 @@ def config_servers_create():
             raise ValueError("Server does not fit")
 
         # are there any other servers on this place?
-        #if servers_dao.server_position(rack, position, position+size-1):
-        #    raise ValueError("There is a server on this place")
+        if servers_dao.server_position(rack, position, position+size-1):
+            raise ValueError("There is a server on this place")
 
         # is this host reachable?
         # (it takes the most time, so it's better to check other conditions first)
-        sensor = SSHiLoSensors(address)
+        sensor = SSHiLoSensors(addr)
         sensor.disconnect()
 
-        servers_dao.server_create(address, type_, rack, size, position)
+        servers_dao.server_create(addr, type_, rack, size, position)
         return redirect(url_for('config_servers'))
 
     except BaseException as e:
-        print e
-        return str(e)
+        return jsonify(error=str(e))
 
 @app.route('/config/servers/update/', methods=['POST'])
 def config_servers_update():
     try:
-        address = request.form['address']
+        addr = request.form['addr']
         type_ = request.form['type']
         rack = int(request.form['rack'])
         size = int(request.form['size'])
@@ -127,20 +125,15 @@ def config_servers_update():
             raise ValueError("Server does not fit")
 
         # are there any other servers on this place?
-        #if servers_dao.server_position(rack, position, position+size-1, address):
-        #    raise ValueError("There is a server on this place")
+        if servers_dao.server_position(rack, position, position+size-1, addr):
+            raise ValueError("There is a server on this place")
 
-        # is this host reachable?
-        # (it takes the most time, so it's better to check other conditions first)
-        sensor = SSHiLoSensors(address)
-        sensor.disconnect()
 
-        servers_dao.server_update(addr=address, update={'type_':type_, 'rack':rack, 'size':size, 'position':position})
+        servers_dao.server_update(addr=addr, update={'type_':type_, 'rack':rack, 'size':size, 'position':position})
         return redirect(url_for('config_servers'))
 
     except BaseException as e:
-        print e
-        return str(e)
+        return jsonify(error=str(e))
 
 @app.route('/config/servers/delete/<server>')
 def config_servers_delete(server):
@@ -149,8 +142,55 @@ def config_servers_delete(server):
         return redirect(url_for('config_servers'))
 
     except BaseException as e:
-        print e
-        return str(e)
+        return jsonify(error=str(e))
+
+
+@app.route('/controller')
+def controller():
+    servers = servers_dao.server_list()
+    return render_template('controller.html', servers=servers)
+
+@app.route("/controller/stream")
+def controller_stream():
+    return Response(handler.subscribe(), mimetype="text/event-stream")
+
+@app.route("/controller/start")
+def controller_start():
+    global controller_gevent
+
+    def run():
+        global controller_inst
+        global handler
+        controller_inst = ILoController([handler])
+        controller_inst.main_loop()
+
+    if controller_inst is None:
+        controller_gevent = gevent.spawn(run)
+    return "Going"
+
+@app.route("/controller/stop")
+def controller_stop():
+    global controller_inst
+    if controller_inst is not None:
+        controller_inst.stop()
+
+        def stop():
+            global controller_gevent
+            global controller_inst
+            controller_gevent.join()
+            controller_inst = None
+
+        gevent.spawn(stop)
+
+    return "Stopped"
+
+@app.route("/controller/status")
+def controller_status():
+    global controller_inst
+    if controller_inst is not None:
+        return controller_inst.state
+    else:
+        return "not started"
 
 
 @app.route('/shutdown')
@@ -160,7 +200,7 @@ def shutdown():
 
 @app.route('/json/servers')
 def json_servers():
-    servers = servers_dao.server_list(True)
+    servers = servers_dao.server_list(with_health=True)
     return jsonify(servers=servers)
 
 @app.route('/json/server/<server>/temperature')
@@ -192,6 +232,11 @@ def json_status(server):
     data = sensors_dao.get_status(server, start, end)
     return jsonify(**data)
 
+if __name__ == "__main__":
+    app.debug = True
+    server = WSGIServer(("", 5000), app)
+    server.serve_forever()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+
+#if __name__ == '__main__':
+#    app.run(host='0.0.0.0')

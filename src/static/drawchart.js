@@ -1,3 +1,32 @@
+$.fn.ajaxSubmit = function() {
+    $(this).on('submit', function(e){
+        e.preventDefault();
+        var action = $(this).attr('action') || document.location.href;
+        var method = $(this).attr('method').toUpperCase() || 'GET';
+        var fields = $(this).serialize();
+        var errors = $(this).find('.errors');
+        var loader = $(this).find('.wait');
+
+        loader.fadeIn('fast');
+        $.ajax({
+            url: action,
+            type: method,
+            data: fields,
+            success: function(data) {
+                loader.fadeOut('fast');
+                if(typeof data.error!='undefined')
+                {
+                    var err = $('<div class="alert alert-danger">').html(data.error).hide().slideDown();
+                    errors.append(err);
+                    setTimeout(function(){err.slideUp()}, 3000);
+                }
+                else
+                    window.location.reload();
+        }
+        });
+    });
+}
+
 
 function rackDiagram(ctx, map, url_template, rack) {
     var racks = 7;
@@ -50,10 +79,10 @@ function rackDiagram(ctx, map, url_template, rack) {
         // server shape
         ctx.beginPath();
         ctx.rect(x, y, w, h);
-        ctx.fillStyle = '#666';
+        ctx.fillStyle = '#ccc';
         ctx.fill();
         ctx.lineWidth = 1;
-        ctx.strokeStyle = 'black';
+        ctx.strokeStyle = '#aaa';
         ctx.stroke();
         ctx.closePath();
 
@@ -72,20 +101,20 @@ function rackDiagram(ctx, map, url_template, rack) {
 
         // server name
         ctx.beginPath();
-        ctx.font = '10px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#fff';
+        ctx.font = '12px "Source Sans Pro"';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#333';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(server.addr, x+10, y+h-2);
+        ctx.fillText(server.addr, x+rack_width/2, y+h-2);
         ctx.closePath();
 
         // temperature
         ctx.beginPath();
-        ctx.font = '20px sans-serif';
+        ctx.font = '20px "Source Sans Pro"';
         ctx.textAlign = 'center';
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = '#111';
         ctx.textBaseline = 'hanging';
-        ctx.fillText(server.temperature+'°', x+rack_width/2, y+3);
+        ctx.fillText(server.temperature+'°', x+rack_width/2, y);
         ctx.closePath();
 
     });
@@ -109,6 +138,12 @@ function drawChart(url, area){
                 'animation': false
             });
         });
+
+        if(!series_data.length)
+        {
+            $(area).html('<div class="alert alert-info">There is no data available! Please try again later.</div>');
+            return;
+        }
 
         $(area).highcharts('StockChart', {
             rangeSelector : {
@@ -136,7 +171,11 @@ function drawChart(url, area){
                     type: 'all',
                     text: 'All'
                 }],
-                inputEnabled: false
+                inputEnabled: false,
+                selected: 0
+            },
+            legend: {
+                enabled: true
             },
             series: series_data
         })
@@ -188,4 +227,36 @@ $(function(){
         $('body').append(modal);
         modal.modal('show');
     });
+
+    $('#controller-status').load('/controller/status');
 });
+
+function statechange(e)
+{
+    var msg = $.parseJSON(e.data);
+    if(msg.level=='STATECHANGE')
+    {
+        $('#controller-status').html(msg.message);
+        if(msg.message=='idle') // loading data has just been finished
+        {
+            $.each(stream.onupdated, function(i,fx){
+                fx();
+            })
+        }
+    }
+}
+
+function streamerr(e)
+{
+    $('#controller-status').html('unreachable');
+}
+
+
+stream = new EventSource('/controller/stream');
+stream.onupdated = [];
+stream.addEventListener('message', statechange, false);
+stream.addEventListener('error', streamerr, false);
+
+$( window ).on('unload', function() {
+    stream.close()
+})

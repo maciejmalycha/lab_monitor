@@ -27,7 +27,7 @@ $(function(){
     }
 
     diagram();
-    setInterval(diagram, 30000);
+    stream.onupdated.push(diagram);
     
 });
 </script>
