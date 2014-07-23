@@ -114,7 +114,11 @@ class ILoController:
                         self.sleep = gevent.spawn(gevent.sleep, wait)
                         self.sleep.join()
 
+<<<<<<< HEAD
                 except BaseException as e:
+=======
+                except e:
+>>>>>>> 01d26a15a013f6bfe33f8801a4a0d080bdd47cc7
                     self.log.exception("Exception happened: %s", e)
 
             self.update_state('off')
