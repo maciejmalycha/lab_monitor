@@ -4,16 +4,16 @@ import argparse
 
 def status(args):
 	hypervisor = server.ESXiHypervisor(args.address, "root", "ChangeMe")
-	print "Getting status of ESXi server", args.address
-	print hypervisor.status()
+	hypervisor.log.info("Getting status of ESXi server", args.address)
+	hypervisor.log.info(hypervisor.status())
 
 def shutdown(args):
 	hypervisor = server.ESXiHypervisor(args.address, "root", "ChangeMe")
 	if args.force:
-		print "Forced shutdown of ESXi server", args.address, "timeout =", args.timeout
+		hypervisor.log.info("Forced shutdown of ESXi server", args.address, "timeout =", args.timeout)
 		hypervisor.force_shutdown(args.timeout)
 	else:
-		print "Shutdown of ESXi server", args.address, "timeout=", args.timeout
+		hypervisor.log.info("Shutdown of ESXi server", args.address, "timeout=", args.timeout)
 		return hypervisor.shutdown(args.timeout)
 
 parser = argparse.ArgumentParser(prog="esxi", description='Manage ESXi server')

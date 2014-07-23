@@ -4,17 +4,17 @@ import argparse
 
 def status(args):
     hypervisor = server.ESXiHypervisor(args.address, "root", "ChangeMe")
-    print "Getting status of ESXi virtual machine", args.address, "ID=", args.vmid
-    print "Is vmWareTools installed?", hypervisor.check_vmwaretools(args.vmid)
-    print hypervisor.get_status(args.vmid)
+    hypervisor.log.info("Getting status of ESXi virtual machine", args.address, "ID=", args.vmid)
+    hypervisor.log.info("Is vmWareTools installed?", hypervisor.check_vmwaretools(args.vmid))
+    hypervisor.log.info(hypervisor.get_status(args.vmid))
 
 def shutdown(args):
     hypervisor = server.ESXiHypervisor(args.address, "root", "ChangeMe")
     if args.force:
-        print "Forced shutdown of ESXi virtual machine", args.address, "ID=", args.vmid,  "timeout =", args.timeout
+        hypervisor.log.info("Forced shutdown of ESXi virtual machine", args.address, "ID=", args.vmid,  "timeout =", args.timeout)
         return hypervisor.execute_shutdown_vm(args.vmid, args.timeout, args.force)
     else:
-        print "Shutdown of ESXi virtual machine", args.address, "ID=", args.vmid, "timeout=", args.timeout
+        hypervisor.log.info("Shutdown of ESXi virtual machine", args.address, "ID=", args.vmid, "timeout=", args.timeout)
         return hypervisor.execute_shutdown_vm(args.vmid, args.timeout)
 
 parser = argparse.ArgumentParser(prog="esxi_vm", description='Manage ESXi virtual machine')
