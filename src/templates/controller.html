@@ -17,6 +17,7 @@
     <div class="btn-group">
         <button class="btn btn-primary" id="controller-start">Start</button>
         <button class="btn btn-danger" id="controller-stop">Stop</button>
+        <button class="btn btn-default" id="controller-restart">Restart</button>
     </div>
     <div class="btn-group">
         <button class="btn btn-default" id="clear-log">Clear log</button>
@@ -42,6 +43,7 @@ function logmessage(e){
             'WARNING': 'fa fa-fw fa-warning',
             'CRITICAL': 'fa fa-fw fa fa-bomb'
         };
+
         $('#log-area').append(
             $('<div>').append(
                 $('<i>').addClass(icons[msg.level])
@@ -63,6 +65,10 @@ $(function(){
 
     $('#controller-stop').on('click', function(){
         $.get('{{ url_for('controller_stop') }}');
+    });
+
+    $('#controller-restart').on('click', function(){
+        $.get('{{ url_for('controller_restart') }}');
     });
 
     $('#clear-log').on('click', function(){

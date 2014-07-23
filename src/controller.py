@@ -2,9 +2,7 @@
 from sensors import SSHiLoSensors
 from database import *
 
-import time
 import logging
-import threading
 import sys
 
 import gevent
@@ -22,6 +20,7 @@ class ILoController:
         self.sleep = None
 
         self.log = logging.getLogger('lab_monitor.controller.ILoController')
+        # TODO: register handlers somewhere else
         for handler in log_handlers:
             self.log.addHandler(handler)
         self.log.setLevel(STATECHANGE)
@@ -29,10 +28,9 @@ class ILoController:
 
         self.update_state('starting...')
 
-
         self.log.info("Initializing...")
 
-        self.servers_dao, self.sensors_dao = get_daos()
+        self.servers_dao, self.sensors_dao = ServersDAO(), SensorsDAO()
         self.log.debug("Database opened")
 
         self.servers = []
@@ -46,8 +44,8 @@ class ILoController:
             self.servers.append(conn)
             self.log.debug("Connected to %s", conn.host)
 
-        if len(self.servers) == 0:
-            self.log.info("Nothing to monitor, exiting")
+        if len(self.servers)==0:
+            self.log.info("Nothing to monitor")
 
     def update_state(self, state):
         self.state = state
@@ -85,34 +83,37 @@ class ILoController:
         self.log.info("Finished checking %s", server.host)
 
     def main_loop(self):
+        if len(self.servers)==0:
+            self.update_state('off')
+            return False
+
         self.loop = True
         try:
             while self.loop:
 
-                t0 = time.time()
+                try:
+                    t0 = time.time()
 
-                self.update_state('working')
+                    self.update_state('working')
 
-                threads = []
-                for server in self.servers:
-                    t = threading.Thread(target=self.store_data, args=(server,))
-                    t.start()
-                    threads.append(t)
+                    tasks = [gevent.spawn(self.store_data, server) for server in self.servers]
+                    gevent.joinall(tasks)
 
-                for t in threads:
-                    t.join()
+                    t = time.time()
+                    dt = t-t0
+                    wait = 60-dt
 
-                t = time.time()
-                dt = t-t0
-                wait = 60-dt
+                    self.update_state('idle')
 
-                self.update_state('idle')
+                    # wait until next minute, unless it's time to finish
+                    if self.loop:
+                        self.log.debug("Waiting %u seconds...", wait)
+                        # it should sleep, but also be able to wake up when stop is called
+                        self.sleep = gevent.spawn(gevent.sleep, wait)
+                        self.sleep.join()
 
-                # wait until next minute, unless it's time to finish
-                if self.loop:
-                    self.log.debug("Waiting %u seconds...", wait)
-                    self.sleep = gevent.spawn(time.sleep, wait)
-                    self.sleep.join()
+                except e:
+                    self.log.exception("Exception happened: %s", e)
 
             self.update_state('off')
             self.log.info("Exiting")
@@ -120,7 +121,6 @@ class ILoController:
                 
         except KeyboardInterrupt:
             self.log.info("Interrupt detected")
-            self.loop = False
 
     def stop(self):
         if self.loop:
