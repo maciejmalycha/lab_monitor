@@ -9,7 +9,7 @@ import gevent
 from gevent.wsgi import WSGIServer
 
 
-servers_dao, sensors_dao = get_daos()
+servers_dao, sensors_dao = ServersDAO(), SensorsDAO()
 
 app = Flask(__name__)
 app.debug = True
@@ -98,6 +98,7 @@ def config_servers_create():
         sensor.disconnect()
 
         servers_dao.server_create(addr, type_, rack, size, position)
+        controller_restart()
         return redirect(url_for('config_servers'))
 
     except BaseException as e:
@@ -130,6 +131,7 @@ def config_servers_update():
 
 
         servers_dao.server_update(addr=addr, update={'type_':type_, 'rack':rack, 'size':size, 'position':position})
+        controller_restart()
         return redirect(url_for('config_servers'))
 
     except BaseException as e:
@@ -139,6 +141,7 @@ def config_servers_update():
 def config_servers_delete(server):
     try:
         servers_dao.server_delete(addr=server)
+        controller_restart()
         return redirect(url_for('config_servers'))
 
     except BaseException as e:
@@ -158,14 +161,14 @@ def controller_stream():
 def controller_start():
     global controller_gevent
 
-    def run():
+    def start():
         global controller_inst
         global handler
         controller_inst = ILoController([handler])
         controller_inst.main_loop()
 
     if controller_inst is None:
-        controller_gevent = gevent.spawn(run)
+        controller_gevent = gevent.spawn(start)
     return "Going"
 
 @app.route("/controller/stop")
@@ -183,6 +186,35 @@ def controller_stop():
         gevent.spawn(stop)
 
     return "Stopped"
+
+@app.route("/controller/restart")
+def controller_restart():
+    global controller_inst
+    global controller_gevent
+    if controller_inst is not None:
+        controller_inst.stop()
+
+        def restart():
+            global controller_gevent
+
+            def stop():
+                global controller_gevent
+                global controller_inst
+                controller_gevent.join()
+                controller_inst = None
+
+            def start():
+                global controller_inst
+                global handler
+                controller_inst = ILoController([handler])
+                controller_inst.main_loop()
+
+            gevent.spawn(stop).join()
+            controller_gevent = gevent.spawn(start)
+
+        gevent.spawn(restart)
+
+    return "Restarting"
 
 @app.route("/controller/status")
 def controller_status():

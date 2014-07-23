@@ -1,11 +1,13 @@
 import paramiko
-import time
+import gevent, gevent.monkey
 import re
 
 paramiko.Transport._preferred_ciphers = ( 'aes128-cbc', '3des-cbc' )
 paramiko.Transport._preferred_macs = ( 'hmac-md5', 'hmac-sha1' )
 paramiko.Transport._preferred_keys = ( 'ssh-rsa', 'ssh-dss' )
 paramiko.Transport._preferred_compression = ( 'none' )
+
+gevent.monkey.patch_all()
 
 
 class ILoSSHClient(paramiko.SSHClient):
@@ -57,7 +59,7 @@ class SSHiLoSensors:
                 self.connect()
 
         output = stdout.read()
-        time.sleep(0.01) # otherwise, if executed in a loop, the program throws paramiko.ssh_exception.SSHException: Unable to open channel
+        gevent.sleep(0.01) # otherwise, if executed in a loop, the program throws paramiko.ssh_exception.SSHException: Unable to open channel
 
         if autoparse:
             if original:

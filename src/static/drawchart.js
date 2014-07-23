@@ -227,16 +227,28 @@ $(function(){
         $('body').append(modal);
         modal.modal('show');
     });
-
-    $('#controller-status').load('/controller/status');
 });
+
+function update_state(state)
+{
+    $.fx.off = !$('#controller-status').html().length;
+    $('#controller-status').fadeOut('fast', function(){
+        $('#controller-status').html('Controller is '+state).fadeIn('fast');
+    });
+    $.fx.off = false;
+    
+    
+}
+
+
 
 function statechange(e)
 {
     var msg = $.parseJSON(e.data);
     if(msg.level=='STATECHANGE')
     {
-        $('#controller-status').html(msg.message);
+        update_state(msg.message);
+        
         if(msg.message=='idle') // loading data has just been finished
         {
             $.each(stream.onupdated, function(i,fx){
@@ -248,7 +260,7 @@ function statechange(e)
 
 function streamerr(e)
 {
-    $('#controller-status').html('unreachable');
+    update_state('unreachable');
 }
 
 
@@ -256,6 +268,12 @@ stream = new EventSource('/controller/stream');
 stream.onupdated = [];
 stream.addEventListener('message', statechange, false);
 stream.addEventListener('error', streamerr, false);
+
+$('#controller-status').tooltip({placement:'bottom'});
+
+$.get('/controller/status', function(d){
+    update_state(d);
+});
 
 $( window ).on('unload', function() {
     stream.close()

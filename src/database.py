@@ -132,10 +132,15 @@ class DAO:
     DB = 'sqlite:///../lab_monitor.sqlite'
 
     def __init__(self, engine=None):
-        if engine:
-            self.engine = engine
-        else:
-            self.engine = create_engine(self.DB)
+        # TODO on the piece of paper
+        try:
+            global DBENGINE
+            DBENGINE
+        except NameError:
+            DBENGINE = create_engine(self.DB)
+            Base.metadata.create_all(DBENGINE)
+
+        self.engine = DBENGINE
 
         Session.configure(bind=self.engine)
 
@@ -179,8 +184,7 @@ class ServersDAO(DAO):
         """Searches for servers on given position"""
         with session_scope() as session:
             q = session.query(Server) \
-                .filter(Server.rack==rack, or_(Server.position<=position1, (Server.position+Server.size-1)<=position0), Server.addr!=except_for if except_for else True)
-            print str(q)
+                .filter(Server.rack==rack, position0<(Server.position+Server.size-1), Server.position<position1, Server.addr!=except_for if except_for is not None else True)
             return q.count()
 
     def server_delete(self, id_=None, addr=None):
@@ -303,6 +307,8 @@ class SensorsDAO(DAO):
 
 def get_daos(classes=[ServersDAO, SensorsDAO]):
     """Returns multiple DAO instances with a common engine"""
+    assert False # no longer used
+
     engine = create_engine(DAO.DB)
-    Base.metadata.create_all(engine)
+    
     return tuple([cl(engine) for cl in classes])
