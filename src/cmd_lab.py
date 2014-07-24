@@ -1,6 +1,7 @@
 import server
 import sys
 import argparse
+import logging
 
 def status(args):
 	lab = server.Laboratory()

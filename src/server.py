@@ -5,13 +5,16 @@ import database
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
-    def __init__(self, hostname, log_handlers=[] , username="root", password="ChangeMe"):
+    def __init__(self, hostname, username="root", password="ChangeMe"):
         self.addr = hostname
-        
+
         self.log = logging.getLogger("lab_monitor.server.ESXiHypervisor")
-        self.log.setLevel(logging.DEBUG)
-        for handler in log_handlers:
-            self.log.addHandler(handler)
+        if not getattr(self.log, 'handler_set', None):
+            self.log.setLevel(logging.INFO)
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.INFO)
+            self.log.addHandler(ch)
+            self.log.handler_set = True
         self.log.info("Connecting...")
 
         self.ssh = paramiko.SSHClient()
@@ -181,13 +184,15 @@ class ESXiVirtualMachine:
         return self.hESXiHypervisor.force_shutdown_vm(self.id)
 
 class Rack:
-    def __init__(self, rackid, log_handlers=[]):
+    def __init__(self, rackid):
         self.id = rackid
-        self.log_handlers = log_handlers
         self.log = logging.getLogger("lab_monitor.server.Rack")
-        self.log.setLevel(logging.DEBUG)
-        for handler in log_handlers:
-            self.log.addHandler(handler)
+        if not getattr(self.log, 'handler_set', None):
+            self.log.setLevel(logging.INFO)
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.INFO)
+            self.log.addHandler(ch)
+            self.log.handler_set = True
         self.log.info("Initialazing rack with id=%s", self.id)
 
     def get_servers(self):
@@ -199,14 +204,16 @@ class Rack:
         for server in FUKTHISHIT:
             addr = server['addr']
             addr = addr[0:-4]   #just to remove sufix '-ilo'
-            hyper_list.append(ESXiHypervisor(addr, self.log_handlers))
+            hyper_list.append(ESXiHypervisor(addr))
         return hyper_list
         
     def status(self):
         hyper_list = self.get_hypervisors_ready()
+        if not hyper_list:
+            self.log.error("Not found")
         for hypervisor in hyper_list:
             self.log.info("Getting status of %s", hypervisor.addr)
-            self.log.info("%s",hypervisor.status())
+            self.log.info("%s", hypervisor.status())
 
     def shutdown(self, timeout):
         hyper_list = self.get_hypervisors_ready()
@@ -233,11 +240,14 @@ class Rack:
                 hypervisor.force_shutdown(timeout)
 
 class Laboratory:
-    def __init__(self, log_handlers=[]):
+    def __init__(self):
         self.log = logging.getLogger("lab_monitor.server.Laboratory")
-        self.log.setLevel(logging.DEBUG)
-        for handler in log_handlers:
-            self.log.addHandler(handler)
+        if not getattr(self.log, 'handler_set', None):
+            self.log.setLevel(logging.INFO)
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.INFO)
+            self.log.addHandler(ch)
+            self.log.handler_set = True
         self.log.info("Initialazing lab")
 
     def get_racks(self):
@@ -250,7 +260,7 @@ class Laboratory:
         racks = self.get_racks()
         for rack in racks:
             self.log.info("Getting status of rack %s", rack.id)
-            self.log.info(rack.status())
+            rack.status()
 
     def shutdown(self, timeout):
         racks = self.get_racks()

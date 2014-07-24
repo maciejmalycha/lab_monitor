@@ -4,9 +4,7 @@ import argparse
 import logging
 
 def status(args):
-	ch = logging.StreamHandler()
-	ch.setLevel(logging.INFO)
-	rack = server.Rack(args.id, log_handlers=[ch])
+	rack = server.Rack(args.id)
 	rack.status()
 
 def shutdown(args):
