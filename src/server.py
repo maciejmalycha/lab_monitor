@@ -5,7 +5,7 @@ import database
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
-    def __init__(self, hostname , username="root", password="ChangeMe", log_handlers=[]):
+    def __init__(self, hostname, log_handlers=[] , username="root", password="ChangeMe"):
         self.addr = hostname
         
         self.log = logging.getLogger("lab_monitor.server.ESXiHypervisor")
@@ -58,7 +58,9 @@ class ESXiHypervisor:
     #If status is 'on', then we shutdown the VM and we add the ID to the list of IDs that are already shutted down by us
     def status(self):
         VMSL = {}
-        stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/getallvms | grep -v Vmid | awk '{print $1}'")
+        #stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/getallvms | grep -v Vmid | awk '{print $1}'")
+        """ Ok so basically I found an exception, where in column with Vmids were also other 'non-number' things, so I had to make an if statement to prevent such a things. This thing occured on pl-byd-esxi12 server"""
+        stdin, stdout, stderr = self.ssh.exec_command("/usr/bin/vim-cmd vmsvc/getallvms | grep -v Vmid | awk 'function isnum(x){return(x==x+0)}{if(isnum($1)) print $1}'")
         output = stdout.read().split()
         for i in output:
             vmid = i
@@ -181,12 +183,12 @@ class ESXiVirtualMachine:
 class Rack:
     def __init__(self, rackid, log_handlers=[]):
         self.id = rackid
-
+        self.log_handlers = log_handlers
         self.log = logging.getLogger("lab_monitor.server.Rack")
         self.log.setLevel(logging.DEBUG)
         for handler in log_handlers:
             self.log.addHandler(handler)
-        self.log.info("Initialazing rack with id=", self.id)
+        self.log.info("Initialazing rack with id=%s", self.id)
 
     def get_servers(self):
         return database.ServersDAO().server_list(self.id)
@@ -197,14 +199,20 @@ class Rack:
         for server in FUKTHISHIT:
             addr = server['addr']
             addr = addr[0:-4]   #just to remove sufix '-ilo'
-            hyper_list.append(ESXiHypervisor(addr))
+            hyper_list.append(ESXiHypervisor(addr, self.log_handlers))
         return hyper_list
         
+    def status(self):
+        hyper_list = self.get_hypervisors_ready()
+        for hypervisor in hyper_list:
+            self.log.info("Getting status of %s", hypervisor.addr)
+            self.log.info("%s",hypervisor.status())
+
     def shutdown(self, timeout):
         hyper_list = self.get_hypervisors_ready()
         force_list = []
         for hypervisor in hyper_list:
-            self.log.info("Initialazing shutdown on ", hypervisor.addr)
+            self.log.info("Initialazing shutdown on %s", hypervisor.addr)
             err = hypervisor.shutdown(timeout)
             if err:
                 self.log.info("Everything went OK")
@@ -216,7 +224,7 @@ class Rack:
     def force_shutdown(self, timeout):
         hyper_list = self.get_hypervisors_ready()
         for hypervisor in hyper_list:
-            self.log.info("Initialazing shutdown on ", hypervisor.addr)
+            self.log.info("Initialazing shutdown on %s", hypervisor.addr)
             err = hypervisor.shutdown(timeout)
             if err:
                 self.log.info("Everything went OK")
@@ -225,23 +233,37 @@ class Rack:
                 hypervisor.force_shutdown(timeout)
 
 class Laboratory:
+    def __init__(self, log_handlers=[]):
+        self.log = logging.getLogger("lab_monitor.server.Laboratory")
+        self.log.setLevel(logging.DEBUG)
+        for handler in log_handlers:
+            self.log.addHandler(handler)
+        self.log.info("Initialazing lab")
+
     def get_racks(self):
         racks = []
         for rackid in range(0,7):
             racks.append(Rack(rackid))
         return racks
 
+    def status(self):
+        racks = self.get_racks()
+        for rack in racks:
+            self.log.info("Getting status of rack %s", rack.id)
+            self.log.info(rack.status())
+
     def shutdown(self, timeout):
         racks = self.get_racks()
         for rack in racks:
-            rack.log.info("Initialazing shutdown on rack:", rack.id)
+            self.log.info("Initialazing shutdown on rack: %s", rack.id)
             rack.shutdown(timeout)
 
     def force_shutdown(self, timeout):
         racks = self.get_racks()
         for rack in racks:
-            rack.log.info("Initialazing shutdown on rack:", rack.id)
+            self.log.info("Initialazing shutdown on rack: %s", rack.id)
             res = rack.shutdown(timeout)
             if res is not None:
                 for hyp in res:
+                    self.log.info("Shutdown failed. Forcing shutdown of a hypervisor: %s", hyp.addr)
                     hyp.force_shutdown(timeout)
