@@ -81,18 +81,18 @@ class ESXiHypervisor:
                 AVMSL.append(vmid)
         for i in AVMSL:
             if not self.check_vmwaretools(int(i)):
-                self.log.warning("vmWareTools not installed on vm id=", i, " Can't perform shutdown")
+                self.log.warning("vmWareTools not installed on vm id=%s Can't perform shutdown", i)
             else:
                 err = self.shutdown_vm(int(i))
-                err.read()
-                self.log.info("Shutting down VM: ", i)
+               # err.read()
+                self.log.info("Shutting down VM: %s", i)
         start = time.time()
         elapsed = time.time()
         while (elapsed - start) < timeout and AVMSL:
-            self.log.info("Active VMs: ", AVMSL)
+            self.log.info("Active VMs: %s", AVMSL)
             for i in AVMSL:
                 if self.get_status(int(i)) == False:
-                    self.log.info("VMID down: ", i)
+                    self.log.info("VMID down: %s", i)
                     AVMSL.remove(i)
             elapsed = time.time()
             time.sleep(0.5)
@@ -114,19 +114,19 @@ class ESXiHypervisor:
                 AVMSL.append(vmid)
         for i in AVMSL:
             if not self.check_vmwaretools(int(i)):
-                self.log.warning("vmWareTools not installed on vm id=",i," Performing force_shutdown()")
+                self.log.warning("vmWareTools not installed on vm id=%s  Performing force_shutdown()", i)
                 out = self.force_shutdown_vm(int(i))
             else:
                 err = self.shutdown_vm(int(i))
-                err.read()
-                self.log.info("Shutting down VM: ", i)
+              #  err.read()
+                self.log.info("Shutting down VM: %s", i)
         start = time.time()
         elapsed = time.time()
         while (elapsed - start) < timeout and AVMSL:
-            self.log.info("Active VMs: ", AVMSL)
+            self.log.info("Active VMs: %s", AVMSL)
             for i in AVMSL:
                 if self.get_status(int(i)) == False:
-                    self.log.info("VMID down: ", i)
+                    self.log.info("VMID down: %s", i)
                     AVMSL.remove(i)
             elapsed = time.time()
             time.sleep(0.5)
@@ -154,7 +154,7 @@ class ESXiHypervisor:
         res = self.shutdown_vm(VM_id)
         if res == False:
             if forced:
-                self.log.info("Forcing a shutdown vm id=", VM_id)
+                self.log.info("Forcing a shutdown vm id=%s", VM_id)
                 out = self.force_shutdown_vm(VM_id)
                 return out
             self.log.warning("Shutting down failed.")
@@ -203,7 +203,8 @@ class Rack:
         FUKTHISHIT = self.get_servers()
         for server in FUKTHISHIT:
             addr = server['addr']
-            addr = addr[0:-4]   #just to remove sufix '-ilo'
+            if addr[-4:] == '-ilo':
+                addr = addr[0:-4]   #just to remove sufix '-ilo'
             hyper_list.append(ESXiHypervisor(addr))
         return hyper_list
         

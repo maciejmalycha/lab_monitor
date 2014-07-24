@@ -10,10 +10,10 @@ def status(args):
 def shutdown(args):
 	rack = server.Rack(args.id)
 	if args.force:
-		rack.log.info("Forced shutdown of rack ", args.id, "timeout =", args.timeout)
+		rack.log.info("Forced shutdown of rack %s timeout =%s",args.id, args.timeout)
 		rack.force_shutdown(args.timeout)
 	else:
-		rack.log.info("Shutdown of rack", args.id, "timeout=", args.timeout)
+		rack.log.info("Shutdown of rack %s timeout=%s", args.id, args.timeout)
 		rack.shutdown(args.timeout)
 
 parser = argparse.ArgumentParser(prog="rack", description='Manage racks')
