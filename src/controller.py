@@ -6,31 +6,33 @@ import logging
 import time
 
 import gevent
-from gevent import monkey
-
-monkey.patch_all()
 
 STATECHANGE = 9
 logging.addLevelName(STATECHANGE, 'STATECHANGE')
 
 class ILoController:
 
-    def __init__(self, log_handlers=[]):
-        self.state = 'starting...'
+    def __init__(self):
+        self.state = "starting..."
         self.sleep = None
+        self.servers_dao = None # you can assign it after instantiating the controller,
+        self.sensors_dao = None # if you don't, connection will be automatically established later
+
+        self.loop = True
 
         self.log = logging.getLogger('lab_monitor.controller.ILoController')
-        # TODO: register handlers somewhere else
-        for handler in log_handlers:
-            self.log.addHandler(handler)
         self.log.setLevel(STATECHANGE)
-        
-
-        self.update_state('starting...')
+    
+    def start(self):
+        self.update_state("starting...")
 
         self.log.info("Initializing...")
 
-        self.servers_dao, self.sensors_dao = ServersDAO(), SensorsDAO()
+        if self.servers_dao is None:
+            self.servers_dao = ServersDAO()
+        if self.sensors_dao is None:
+            self.sensors_dao = SensorsDAO()
+
         self.log.debug("Database opened")
 
         self.servers = []
@@ -38,9 +40,7 @@ class ILoController:
             try:
                 conn = SSHiLoSensors(serv['addr'])
             except Exception as e:
-                import traceback
                 self.log.error("Cannot connect to %s: %s", serv['addr'], e)
-                traceback.print_exc()
                 continue
 
             self.servers.append(conn)
@@ -48,6 +48,9 @@ class ILoController:
 
         if len(self.servers)==0:
             self.log.info("Nothing to monitor")
+            return
+
+        self.main_loop()
 
     def update_state(self, state):
         self.state = state
@@ -68,35 +71,26 @@ class ILoController:
 
         self.log.debug("Loading power units of %s...", server.host)
         power_units = server.power_units()
-        i = 0
+        self.log.debug("Storing power units of %s...", server.host)
         for power_supply, state in power_units.iteritems():
-            i+=1
-            self.log.debug("Storing power unit %u/%u of %s...", i, len(power_units), server.host)
             self.sensors_dao.store_power_unit(server.host, power_supply, state['operational'], state['health'])
 
         self.log.debug("Loading temperature of %s...", server.host)
         temp_sensors = server.temp_sensors()
-        i = 0
+        self.log.debug("Storing temperature sensor of %s...", server.host)
         for sensor, reading in temp_sensors.iteritems():
-            i+=1
-            self.log.debug("Storing temperature sensor %u/%u of %s...", i, len(temp_sensors), server.host)
             self.sensors_dao.store_temperature(server.host, sensor, reading)
 
         self.log.info("Finished checking %s", server.host)
 
     def main_loop(self):
-        if len(self.servers)==0:
-            self.update_state('off')
-            return False
-
         self.loop = True
         try:
             while self.loop:
-
                 try:
                     t0 = time.time()
 
-                    self.update_state('working')
+                    self.update_state("working")
 
                     tasks = [gevent.spawn(self.store_data, server) for server in self.servers]
                     gevent.joinall(tasks)
@@ -105,7 +99,7 @@ class ILoController:
                     dt = t-t0
                     wait = 60-dt
 
-                    self.update_state('idle')
+                    self.update_state("idle")
 
                     # wait until next minute, unless it's time to finish
                     if self.loop:
@@ -113,11 +107,11 @@ class ILoController:
                         # it should sleep, but also be able to wake up when stop is called
                         self.sleep = gevent.spawn(gevent.sleep, wait)
                         self.sleep.join()
-                        
+
                 except BaseException as e:
                     self.log.exception("Exception happened: %s", e)
 
-            self.update_state('off')
+            self.update_state("off")
             self.log.info("Exiting")
             return True
                 
@@ -125,9 +119,12 @@ class ILoController:
             self.log.info("Interrupt detected")
 
     def stop(self):
+        """Stops the main loop. If the controller is working, waits until the end of current iteration. If it's idle, breaks out of sleep immediately"""
+
         if self.loop:
             self.log.info("Stop called")
             self.loop = False
+            self.update_state("stopping")
             if self.sleep is not None:
                 self.sleep.kill()
         else:
@@ -137,5 +134,6 @@ if __name__ == '__main__':
     ch = logging.StreamHandler()
     ch.setLevel(logging.WARNING)
 
-    contr = ILoController(log_handlers=[ch])
-    contr.main_loop()
+    contr = ILoController()
+    contr.log.addHandler(ch)
+    contr.start()

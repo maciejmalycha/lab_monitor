@@ -139,10 +139,10 @@ class DAO:
         except NameError:
             DBENGINE = create_engine(self.DB)
             Base.metadata.create_all(DBENGINE)
+            Session.configure(bind=DBENGINE)
 
         self.engine = DBENGINE
 
-        Session.configure(bind=self.engine)
 
 
 
@@ -184,7 +184,7 @@ class ServersDAO(DAO):
         """Searches for servers on given position"""
         with session_scope() as session:
             q = session.query(Server) \
-                .filter(Server.rack==rack, position0<(Server.position+Server.size-1), Server.position<position1, Server.addr!=except_for if except_for is not None else True)
+                .filter(Server.rack==rack, position0<=(Server.position+Server.size-1), Server.position<=position1, Server.addr!=except_for if except_for is not None else True)
             return q.count()
 
     def server_delete(self, id_=None, addr=None):

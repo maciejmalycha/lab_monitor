@@ -3,7 +3,7 @@ import gevent, gevent.queue
 import json
 
 class SSEHandler(logging.Handler):
-    """This class allows logging to a Server Sent Event stream, it also contains """
+    """This class allows logging to a Server Sent Event stream"""
 
     def __init__(self):
         logging.Handler.__init__(self)        

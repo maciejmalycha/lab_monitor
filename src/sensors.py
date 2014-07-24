@@ -76,17 +76,16 @@ class SSHiLoSensors:
 
     def power_use(self):
         """Returns power usage"""
-        response,text = self.show("/system1", original=True)
-        try:
-            return {
-                'present': int(response['oemhp_PresentPower'].split()[0]),
-                'avg': int(response['oemhp_AveragePower'].split()[0]),
-                'min': int(response['oemhp_MinPower'].split()[0]),
-                'max': int(response['oemhp_MaxPower'].split()[0])
-            }
-        except KeyError:
-            # I hope we'll discover the cause of the KeyError
-            print text
+        response = self.show("/system1")
+
+        data = {}
+        for key,ilo_key in [('present','oemhp_PresentPower'), ('avg','oemhp_AveragePower'), ('min','oemhp_MinPower'), ('max','oemhp_MaxPower')]:
+            try:
+                data[key] = int(response[ilo_key].split()[0])
+            except KeyError:
+                data[key] = None
+
+        return data
 
     def power_units(self):
         """ Returns health states and operational statuses of all power supplies"""

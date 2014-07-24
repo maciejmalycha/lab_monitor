@@ -128,7 +128,6 @@ function drawChart(url, area){
         }
     });
 
-
     var series_data = [];
     $.getJSON(url, function(r){
         $.each(r, function(name, data){
@@ -145,40 +144,55 @@ function drawChart(url, area){
             return;
         }
 
-        $(area).highcharts('StockChart', {
-            rangeSelector : {
-                buttons: [{
-                    type: 'hour',
-                    count: 1,
-                    text: '1h'
-                }, {
-                    type: 'hour',
-                    count: 6,
-                    text: '6h'
-                }, {
-                    type: 'hour',
-                    count: 12,
-                    text: '12h'
-                }, {
-                    type: 'day',
-                    count: 1,
-                    text: '1d'
-                }, {
-                    type: 'week',
-                    count: 1,
-                    text: '1w'
-                }, {
-                    type: 'all',
-                    text: 'All'
-                }],
-                inputEnabled: false,
-                selected: 0
-            },
-            legend: {
-                enabled: true
-            },
-            series: series_data
-        })
+        if(typeof $(area).highcharts=='undefined')
+        {
+            // drawing for the first time
+            $(area).highcharts('StockChart', {
+                rangeSelector : {
+                    buttons: [{
+                        type: 'hour',
+                        count: 1,
+                        text: '1h'
+                    }, {
+                        type: 'hour',
+                        count: 6,
+                        text: '6h'
+                    }, {
+                        type: 'hour',
+                        count: 12,
+                        text: '12h'
+                    }, {
+                        type: 'day',
+                        count: 1,
+                        text: '1d'
+                    }, {
+                        type: 'week',
+                        count: 1,
+                        text: '1w'
+                    }, {
+                        type: 'all',
+                        text: 'All'
+                    }],
+                    inputEnabled: false,
+                    selected: 0
+                },
+                legend: {
+                    enabled: true
+                },
+                series: series_data
+            })
+        }
+        else
+        {
+            // updating series
+            $(area).highcharts().series = [];
+            // the highcharts.series array has a different layout,
+            // that's why we need to clear it and add all series again
+            $.each(series_data, function(i,el){
+                $(area).highcharts().addSeries(el);
+            });
+            $(area).highcharts().redraw();
+        }
     }).fail(function(){
         $(area).html('<div class="alert alert-danger">Failed to load data! Please try again later.</div>');
     })
@@ -237,44 +251,43 @@ function update_state(state)
     });
     $.fx.off = false;
     
-    
-}
-
-
-
-function statechange(e)
-{
-    var msg = $.parseJSON(e.data);
-    if(msg.level=='STATECHANGE')
+    if(state=='off')
     {
-        update_state(msg.message);
-        
-        if(msg.message=='idle') // loading data has just been finished
-        {
-            $.each(stream.onupdated, function(i,fx){
-                fx();
-            })
-        }
+        $('#controller-stop, #controller-restart').prop('disabled', true);
+        $('#controller-start').prop('disabled', false);
+    }
+    else if(state=='stopping' || state=='unreachable')
+    {
+        $('#controller-start, #controller-stop, #controller-restart').prop('disabled', true);
+    }
+    else
+    {
+        $('#controller-stop, #controller-restart').prop('disabled', false);
+        $('#controller-start').prop('disabled', true);
     }
 }
 
-function streamerr(e)
-{
-    update_state('unreachable');
-}
-
-
-stream = new EventSource('/controller/stream');
-stream.onupdated = [];
-stream.addEventListener('message', statechange, false);
-stream.addEventListener('error', streamerr, false);
-
-$('#controller-status').tooltip({placement:'bottom'});
 
 $.get('/controller/status', function(d){
     update_state(d);
 });
 
-$( window ).on('unload', function() {
-    stream.close()
-})
+stream = new EventSource('/controller/stream');
+stream.onupdated = [];
+stream.addEventListener('message', function(e) {
+    var msg = $.parseJSON(e.data);
+    if(msg.level=='STATECHANGE')
+    {
+        update_state(msg.message);
+        
+        if(msg.message=='idle') // loading new data has just been finished
+        {
+            $.each(stream.onupdated, function(i,fx){
+                fx();
+            });
+        }
+    }
+}, false);
+stream.addEventListener('error', function() {
+    update_state('unreachable');
+}, false);

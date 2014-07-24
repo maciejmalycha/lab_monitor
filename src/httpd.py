@@ -14,8 +14,8 @@ servers_dao, sensors_dao = ServersDAO(), SensorsDAO()
 app = Flask(__name__)
 app.debug = True
 app.jinja_env.filters['unsafejson'] = lambda v: json.dumps(v)
-controller_inst = None
-controller_gevent = None
+controller_inst = None # ILoController instance
+controller_gevent = None # Greenlet that started the ILoController 
 handler = ssehandler.SSEHandler()
 
 @app.route('/')
@@ -153,68 +153,59 @@ def controller():
     servers = servers_dao.server_list()
     return render_template('controller.html', servers=servers)
 
+
+
+def cstart():
+    global controller_inst
+    global handler
+    global servers_dao, sensors_dao
+    controller_inst = ILoController()
+    controller_inst.log.addHandler(handler)
+    controller_inst.servers_dao = servers_dao
+    controller_inst.sensors_dao = sensors_dao
+    controller_inst.start()
+
+def cstop():
+    global controller_gevent
+    global controller_inst
+    controller_inst.stop()
+    controller_gevent.join()
+    controller_inst = None
+
+def crestart():
+    global controller_gevent
+    gevent.spawn(cstop).join()
+    controller_gevent = gevent.spawn(cstart)
+
+
 @app.route("/controller/stream")
 def controller_stream():
     return Response(handler.subscribe(), mimetype="text/event-stream")
 
 @app.route("/controller/start")
 def controller_start():
+    global controller_inst
     global controller_gevent
-
-    def start():
-        global controller_inst
-        global handler
-        controller_inst = ILoController([handler])
-        controller_inst.main_loop()
-
     if controller_inst is None:
-        controller_gevent = gevent.spawn(start)
-    return "Going"
+        controller_gevent = gevent.spawn(cstart)
+        return "starting"
+    return "already running"
 
 @app.route("/controller/stop")
 def controller_stop():
     global controller_inst
     if controller_inst is not None:
-        controller_inst.stop()
-
-        def stop():
-            global controller_gevent
-            global controller_inst
-            controller_gevent.join()
-            controller_inst = None
-
-        gevent.spawn(stop)
-
-    return "Stopped"
+        gevent.spawn(cstop)
+        return "stopping"
+    return "already stopped"
 
 @app.route("/controller/restart")
 def controller_restart():
     global controller_inst
-    global controller_gevent
     if controller_inst is not None:
-        controller_inst.stop()
-
-        def restart():
-            global controller_gevent
-
-            def stop():
-                global controller_gevent
-                global controller_inst
-                controller_gevent.join()
-                controller_inst = None
-
-            def start():
-                global controller_inst
-                global handler
-                controller_inst = ILoController([handler])
-                controller_inst.main_loop()
-
-            gevent.spawn(stop).join()
-            controller_gevent = gevent.spawn(start)
-
-        gevent.spawn(restart)
-
-    return "Restarting"
+        gevent.spawn(crestart)
+        return "restarting"
+    return "not started"
 
 @app.route("/controller/status")
 def controller_status():
@@ -222,7 +213,7 @@ def controller_status():
     if controller_inst is not None:
         return controller_inst.state
     else:
-        return "not started"
+        return "off"
 
 
 @app.route('/shutdown')
@@ -264,10 +255,17 @@ def json_status(server):
     data = sensors_dao.get_status(server, start, end)
     return jsonify(**data)
 
+
 if __name__ == "__main__":
     app.debug = True
     server = WSGIServer(("", 5000), app)
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except (KeyboardInterrupt, SystemExit):
+        if controller_inst is not None:
+            print "Stopping running controller"
+            cstop()
+        print "Closing the server"
 
 
 #if __name__ == '__main__':
