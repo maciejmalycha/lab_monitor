@@ -3,7 +3,8 @@ import sys
 import argparse
 
 def status(args):
-	pass
+	lab = server.Laboratory()
+	lab.status()
 
 def shutdown(args):
 	lab = server.Laboratory()
