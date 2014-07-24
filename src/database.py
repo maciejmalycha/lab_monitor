@@ -146,8 +146,6 @@ class DAO:
         self.engine = DBENGINE
 
 
-
-
 class ServersDAO(DAO):
 
     def server_create(self, addr, type_, rack, size, position):

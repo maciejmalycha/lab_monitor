@@ -56,6 +56,7 @@ class SSHiLoSensors:
                 stdin,stdout,stderr = self.ssh.exec_command(cmd)
                 success = True
             except paramiko.SSHException:
+                self.disconnect()
                 self.connect()
 
         output = stdout.read()
