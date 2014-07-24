@@ -200,8 +200,8 @@ class Rack:
     
     def get_hypervisors_ready(self):
         hyper_list = []
-        FUKTHISHIT = self.get_servers()
-        for server in FUKTHISHIT:
+        serv_list = self.get_servers()
+        for server in serv_list:
             addr = server['addr']
             if addr[-4:] == '-ilo':
                 addr = addr[0:-4]   #just to remove sufix '-ilo'
