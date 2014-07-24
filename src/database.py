@@ -1,3 +1,5 @@
+#-*- coding: utf-8 -*-
+
 from contextlib import contextmanager
 
 from sqlalchemy import *
@@ -171,7 +173,7 @@ class ServersDAO(DAO):
                             .first()
 
                         row['power_supplies'] = [unit.health=='Ok' and unit.operational=='Ok' for unit in power_units]
-                        row['temperature'] = temperature.reading
+                        row['temperature'] = "%u°"%temperature.reading
                     except AttributeError:
                         row['power_supplies'] = []
                         row['temperature'] = '?'
@@ -303,12 +305,44 @@ class SensorsDAO(DAO):
 
             return data
 
+    def get_general(self, server):
+        """Loads last Ambient Zone temperature reading, present power usage, power supplies and server status"""
 
+        with session_scope() as session:
+            power_units = session.query(PowerUnits).filter(PowerUnits.server==server).group_by(PowerUnits.power_supply).order_by(PowerUnits.power_supply)
+            temperature = session.query(Temperature) \
+                .filter(Temperature.server==server, Temperature.sensor=='Ambient Zone') \
+                .order_by(desc(Temperature.timestamp)) \
+                .first()
+            power_usage = session.query(PowerUsage) \
+                .filter(PowerUsage.server==server, PowerUsage.present!=None) \
+                .order_by(desc(PowerUsage.timestamp)) \
+                .first()
+            status = session.query(ServerStatus) \
+                .filter(ServerStatus.server==server) \
+                .order_by(desc(ServerStatus.timestamp)) \
+                .first()
 
-def get_daos(classes=[ServersDAO, SensorsDAO]):
-    """Returns multiple DAO instances with a common engine"""
-    assert False # no longer used
+            data = {}
 
-    engine = create_engine(DAO.DB)
-    
-    return tuple([cl(engine) for cl in classes])
+            try:
+                data['power_units'] = "ok" if reduce(lambda a,b: a and b, (unit.health=='Ok' and unit.operational=='Ok' for unit in power_units)) else "alert"
+            except:
+                data['power_units'] = '?'
+
+            try:
+                data['temperature'] = "%u°"%temperature.reading
+            except:
+                data['temperature'] = '?'
+
+            try:
+                data['power_usage'] = "%u W"%power_usage.present
+            except:
+                data['power_usage'] = '?'
+
+            try:
+                data['status'] = "ok" if status.status else "alert"
+            except:
+                data['status'] = '?'
+
+            return data

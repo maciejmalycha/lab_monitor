@@ -226,6 +226,11 @@ def json_servers():
     servers = servers_dao.server_list(with_health=True)
     return jsonify(servers=servers)
 
+@app.route('/json/server/<server>')
+def json_general(server):
+    data = sensors_dao.get_general(server)
+    return jsonify(**data)
+
 @app.route('/json/server/<server>/temperature')
 def json_temperature(server):
     start = request.args.get('start', None)

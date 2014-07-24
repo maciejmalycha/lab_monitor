@@ -114,7 +114,7 @@ function rackDiagram(ctx, map, url_template, rack) {
         ctx.textAlign = 'center';
         ctx.fillStyle = '#111';
         ctx.textBaseline = 'hanging';
-        ctx.fillText(server.temperature+'°', x+rack_width/2, y);
+        ctx.fillText(server.temperature, x+rack_width/2, y);
         ctx.closePath();
 
     });
@@ -144,7 +144,7 @@ function drawChart(url, area){
             return;
         }
 
-        if(typeof $(area).highcharts=='undefined')
+        if(typeof $(area).highcharts()=='undefined')
         {
             // drawing for the first time
             $(area).highcharts('StockChart', {
@@ -180,18 +180,15 @@ function drawChart(url, area){
                     enabled: true
                 },
                 series: series_data
-            })
+            });
         }
         else
         {
             // updating series
-            $(area).highcharts().series = [];
-            // the highcharts.series array has a different layout,
-            // that's why we need to clear it and add all series again
-            $.each(series_data, function(i,el){
-                $(area).highcharts().addSeries(el);
+            $.each($(area).highcharts().series, function(i,series){
+                series.setData(r[series.name], true);
             });
-            $(area).highcharts().redraw();
+            //$(area).highcharts().redraw();
         }
     }).fail(function(){
         $(area).html('<div class="alert alert-danger">Failed to load data! Please try again later.</div>');
