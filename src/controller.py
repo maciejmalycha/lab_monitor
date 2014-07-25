@@ -48,6 +48,7 @@ class ILoController:
 
         if len(self.servers)==0:
             self.log.info("Nothing to monitor")
+            self.update_state("off")
             return
 
         self.main_loop()

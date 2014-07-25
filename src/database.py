@@ -265,7 +265,7 @@ class SensorsDAO(DAO):
 
             q = session.query(PowerUnits).filter(PowerUnits.server==server, between(PowerUnits.timestamp, start, end)).order_by(PowerUnits.timestamp)
             for row in q:
-                data[row.power_supply].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), row.operational=='Ok' and row.health=='Ok'])
+                data[row.power_supply].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), int(row.operational=='Ok' and row.health=='Ok')])
 
             return data
 
@@ -299,7 +299,7 @@ class SensorsDAO(DAO):
 
             q = session.query(ServerStatus).filter(ServerStatus.server==server, between(ServerStatus.timestamp, start, end)).order_by(ServerStatus.timestamp)
             for row in q:
-                data['status'].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), row.status])
+                data['status'].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), int(row.status)])
 
             return data
 
