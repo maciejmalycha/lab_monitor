@@ -38,6 +38,26 @@ function rackDiagram(ctx, map, url_template, rack) {
     var rack_width = parseInt(width/racks);
     var unit_height = parseInt(height/units);
 
+    if(typeof rack!='undefined')
+    {
+        // on resize this function is called again to redraw things, 
+        // but there's no need to reload the data from server,
+        // that's why we'll store it here 
+        ctx.rack = rack;
+    }
+    else if(typeof ctx.rack!='undefined')
+    {
+        // no new data, but the size has changed
+        rack = ctx.rack;
+    }
+    else
+    {
+        // respond() has been called, but data from server is not available
+        // data has not been loaded yet, but in a moment an ajax request
+        // will finish and this function will be called again
+        return false;
+    }
+
     ctx.clearRect(0,0,width,height);
 
     map.empty();
@@ -100,22 +120,23 @@ function rackDiagram(ctx, map, url_template, rack) {
         });
 
         // server name
-        ctx.beginPath();
         ctx.font = '12px "Source Sans Pro"';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#333';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(server.addr, x+rack_width/2, y+h-2);
-        ctx.closePath();
+        // wait! the text may be too big for current canvas size
+        var text_size = ctx.measureText(server.addr);
+        if(text_size.width<rack_width)
+        {
+            ctx.fillText(server.addr, x+rack_width/2, y+h-2);
+        }
 
         // temperature
-        ctx.beginPath();
         ctx.font = '20px "Source Sans Pro"';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#111';
         ctx.textBaseline = 'hanging';
         ctx.fillText(server.temperature, x+rack_width/2, y);
-        ctx.closePath();
 
     });
 }

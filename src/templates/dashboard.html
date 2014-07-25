@@ -17,17 +17,28 @@
 {% block scripts %}
 <script>
 $(function(){
-    var canvas = $('#rack-diagram')[0];
-    var ctx = canvas.getContext('2d');
+    var canvas = $('#rack-diagram');
+    var map = $('#servers-map');
+    var ctx = canvas[0].getContext('2d');
 
     var diagram = function() {
         $.getJSON('{{ url_for('json_servers') }}', function(d){
-            rackDiagram(ctx, $('#servers-map'), '{{ url_for('status', server='_') }}', d.servers);
+            rackDiagram(ctx, map, '{{ url_for('status', server='_') }}', d.servers);
         });
     }
 
     diagram();
     stream.onupdated.push(diagram);
+
+
+    var respond = function(){
+        canvas.attr('width', canvas.parent().width());
+        $('#mapme').css('width', canvas.parent().width());
+        rackDiagram(ctx, map, '{{ url_for('status', server='_') }}');
+    }
+
+    respond();
+    $(window).on('resize', respond);
     
 });
 </script>
