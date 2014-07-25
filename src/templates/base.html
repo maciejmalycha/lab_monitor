@@ -48,6 +48,7 @@
            {% endif %}
            <li{{ ' class="active"'|safe if request.url_rule.endpoint.startswith('config') else '' }}><a href="{{ url_for('config') }}">Configuration</a></li>
            <li{{ ' class="active"'|safe if request.url_rule.endpoint.startswith('controller') else '' }}><a href="{{ url_for('controller') }}">Controller</a></li>
+           <li{{ ' class="active"'|safe if request.url_rule.endpoint.startswith('esxi') else '' }}><a href="{{ url_for('esxi', rack_id=0) }}">ESXi</a></li>
            <li{{ ' class="active"'|safe if 'shutdown'==request.url_rule.endpoint else '' }}><a href="{{ url_for('shutdown') }}" data-confirm="Do you really want to shutdown?">Shutdown</a></li>
          </ul>
          <p class="navbar-text navbar-right"><span id="controller-status"></span></p>

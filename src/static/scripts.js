@@ -200,7 +200,10 @@ function drawChart(url, area){
                 legend: {
                     enabled: true
                 },
-                series: series_data
+                series: series_data,
+                xAxis: {
+                    minTickInterval: 60000
+                }
             });
         }
         else
@@ -217,7 +220,7 @@ function drawChart(url, area){
 }
 
 $(function(){
-    $('[data-confirm]').on('click', function(e){
+    $('body').on('click', '[data-confirm]', function(e){
 
         e.preventDefault();
         clone = $(this).clone()

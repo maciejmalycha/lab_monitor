@@ -3,6 +3,7 @@ from flask import *
 from database import *
 from sensors import SSHiLoSensors
 from controller import ILoController
+from server import *
 
 import ssehandler
 import gevent
@@ -56,7 +57,6 @@ def status_status(server):
 def status_power_units(server):
     servers = servers_dao.server_list()
     return render_template('status.html', servers=servers, server=server, data_src='json_power_units')
-
 
 @app.route('/config')
 def config():
@@ -146,6 +146,15 @@ def config_servers_delete(server):
 
     except BaseException as e:
         return jsonify(error=str(e))
+
+
+@app.route('/esxi/rack/<int:rack_id>')
+def esxi(rack_id=0):
+    servers = servers_dao.server_list()
+    return render_template('esxi.html', servers=servers, rack_id=rack_id)
+
+
+
 
 
 @app.route('/controller')
@@ -260,12 +269,26 @@ def json_status(server):
     data = sensors_dao.get_status(server, start, end)
     return jsonify(**data)
 
+@app.route('/json/esxi/rack/<rack_id>')
+def json_esxi_rack(rack_id):
+    rack_inst = Rack(rack_id)
+    hypervisors = rack_inst.get_hypervisors_ready()
+
+    vms = {}
+    for hv in hypervisors:
+        hv_vms = []
+        for vm in hv.status():
+            hv_vms.append({'id':vm, 'status': hv.get_status(vm), 'tools': hv.check_vmwaretools(vm)})
+
+        vms[hv.addr] = hv_vms
+    return jsonify(**vms)
+
 
 if __name__ == "__main__":
     app.debug = True
-    server = WSGIServer(("", 5000), app)
+    wsgi_server = WSGIServer(("", 5000), app)
     try:
-        server.serve_forever()
+        wsgi_server.serve_forever()
     except (KeyboardInterrupt, SystemExit):
         if controller_inst is not None:
             print "Stopping running controller"
