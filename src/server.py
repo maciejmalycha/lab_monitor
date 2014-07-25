@@ -2,6 +2,9 @@ import paramiko
 import time
 import logging
 import database
+import smtplib
+from email.mime.text import MIMEText
+from smtplib import SMTPException
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
@@ -200,8 +203,8 @@ class Rack:
     
     def get_hypervisors_ready(self):
         hyper_list = []
-        FUKTHISHIT = self.get_servers()
-        for server in FUKTHISHIT:
+        serv_list = self.get_servers()
+        for server in serv_list:
             addr = server['addr']
             if addr[-4:] == '-ilo':
                 addr = addr[0:-4]   #just to remove sufix '-ilo'
@@ -252,10 +255,7 @@ class Laboratory:
         self.log.info("Initialazing lab")
 
     def get_racks(self):
-        racks = []
-        for rackid in range(0,7):
-            racks.append(Rack(rackid))
-        return racks
+        return [Rack(rackid) for rackid in range(7)]
 
     def status(self):
         racks = self.get_racks()
@@ -278,3 +278,141 @@ class Laboratory:
                 for hyp in res:
                     self.log.info("Shutdown failed. Forcing shutdown of a hypervisor: %s", hyp.addr)
                     hyp.force_shutdown(timeout)
+
+class EmailNotification():
+    def __init__(self):
+        self.log = logging.getLogger("lab_monitor.server.EmailNotification")
+        if not getattr(self.log, 'handler_set', None):
+            self.log.setLevel(logging.INFO)
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.INFO)
+            self.log.addHandler(ch)
+            self.log.handler_set = True
+        self.log.info("Initialazing EmailNotificator")
+
+        self.email_subject = "lab_monitor notification"
+        self.email_receivers = ['receiverId@gmail.com']
+        self.email_sender  =  'senderId@gmail.com'
+        self.gmail_smtp = "smtp.gmail.com"
+        self.gmail_smtp_port = 587
+        self.text_subtype = "plain"
+        self.email_password = ""
+
+    def send_communication(self,signal):
+        if signal[2] == "restored":
+            comm_restored = "Communication with server {server} restored."
+            return comm_restored
+        elif signal[2] == "lost":
+            comm_lost = "Communication with server {server} lost. Last reading from {datetime}."
+            return comm_lost
+
+    def send_server_power(self,signal):
+        if signal[2] == "restored":
+            power_server_restored = "Power restored in server {server}."
+            return power_server_restored
+        elif signal[2] == "partial_loss":
+            power_server_partial_loss = "Partial power loss in server {server}. Suspected PDU failure."
+            return power_server_partial_loss
+    
+    def send_rack_power(self,signal):
+        if signal[2] == "partial_loss":
+            if signal[3] == "UPS":   
+                power_rack_partial_loss_UPS = "Partial power loss in rack {rack}. Suspected UPS failure."
+                return power_rack_partial_loss_UPS
+            elif signal[3] == "grid":
+                power_rack_partial_loss_grid = "Partial power loss in rack {rack}. Suspected power grid failure."
+                return power_rack_partial_loss_grid
+        elif signal[2] == "restored":
+            power_rack_restored = "Power restored in rack {rack}."
+            return power_rack_restored
+
+    def send_lab_power(self,signal):
+        if signal[2] == "partial_loss":
+            power_lab_partial_loss = "Partial power loss in laboratory. Suspected grid failure. Shutdown in {number} minutes."
+            return power_lab_partial_loss
+        elif signal[2] == "restored":
+            power_lab_restored = "Power restored in laboratory. Shutdown aborted."
+            return power_lab_restored
+
+    def send_server_temperature(self,signal):
+        if signal[2] == "status":
+            if signal[3] == "raised":
+                temp_server_status_raise = "Inlet temperature in server {server} reached {number}C."
+                return temp_server_status_raise
+            elif signal[3] == "dropped":
+                temp_server_status_drop = "Inlet temperature in server {server} dropped below {number}C."
+                return temp_server_status_drop
+        elif signal[2] == "shutdown":
+            temp_server_shutdown = "Inlet temperature in server {server} reached {number}C. Shutting down the server."
+            return temp_server_shutdown
+    
+    def send_rack_temperature(self,signal):
+        if signal[2] == "status":
+            if signal[3] == "raised":
+                temp_rack_status_raise = "Inlet temperature in rack {rack} reached {number}C."
+                return temp_rack_status_raise
+            elif signal[3] == "dropped":
+                temp_rack_status_drop = "Inlet temperature in rack {rack} dropped below {number}C."
+                return temp_rack_status_drop
+        elif signal[2] == "shutdown":
+            temp_rack_shutdown = "Inlet temperature in rack {rack} reached {number}C. Shutting down the rack."
+            return temp_rack_shutdown
+    
+    def send_lab_temperature(self,signal):
+        if signal[2] == "status":
+            if signal[3] == "raised":
+                temp_lab_status_raise = "Inlet temperature in laboratory reached {number}C."
+                return temp_lab_status_raise
+            elif signal[3] == "dropped":
+                temp_lab_status_drop = "Inlet temperature in laboratory dropped below {number}C."
+                return temp_lab_status_drop
+        elif signal[2] == "shutdown":
+            temp_lab_shutdown = "Inlet temperature in laboratory reached {number}C. Shutting down the laboratory."
+            return temp_lab_shutdown
+
+    def send_shutdown(self,signal):
+        if signal[2] == "init":
+            shutdown_server = "Shutting down server {server}."
+            return shutdown_server
+        elif signal[2] == "completed":
+            shutdown_server_status = "Server {server} shutdown completed."
+            return shutdown_server_status
+
+    def get_notification(self, signal):
+        if signal[0] == "communication":
+            return send_communication(signal)
+        elif signal[0] == "power":
+            if signal[1] == "server":
+                return send_server_power(signal)
+            elif signal[1] == "rack":
+                return send_rack_power(signal)
+            elif signal[1] == "lab":
+                return send_lab_power(signal)
+        elif signal[0] == "temperature":
+            if signal[1] == "server":
+                return send_server_temperature(signal)
+            elif signal[1] == "rack":
+                return send_rack_temperature(signal)
+            elif signal[1] == "lab":
+                return send_lab_temperature(signal)
+        elif signal[0] == "shutdown":
+            return send_shutdown(signal)
+        else:
+            return "wrong signal construction"
+
+    def send_mail(self, signal):
+        """Basing on signal we recieve, we must decide what kind of notfication we want to send"""
+        msg = MIMEText(self.get_notification(signal), self.text_subtype)
+        msg["Subject"] = self.email_subject
+        msg["To"] = self.email_receivers
+
+        try:
+            lab_smtp = smtplib.SMTP(self.gmail_smtp, self.gmail_smtp_port)
+            lab_smtp.ehlo()
+            lab_smtp.starttls()
+            lab_smtp.ehlo()
+            lab_smtp.login(user=self.email_sender, password=self.email_password)
+            lab_smtp.sendmail(self.email_sender, self.email_receivers, msg.as_string())
+            lab_smtp.quit()
+        except SMTPException as error:
+            self.log.error("Error: unable to send email : {err}".format(err=error))
