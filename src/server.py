@@ -278,7 +278,6 @@ class Laboratory:
                 for hyp in res:
                     self.log.info("Shutdown failed. Forcing shutdown of a hypervisor: %s", hyp.addr)
                     hyp.force_shutdown(timeout)
-<<<<<<< HEAD
 
 class EmailNotification():
     def __init__(self):
@@ -298,6 +297,10 @@ class EmailNotification():
         self.gmail_smtp_port = 587
         self.text_subtype = "plain"
         self.email_password = ""
+        
+"""BEWARE
+ABOSULTELY DISGUSTING BEGINS HERE
+ALSO ITS NOT FINISHED YET"""
 
     def send_communication(self,signal):
         if signal[2] == "restored":
@@ -417,5 +420,3 @@ class EmailNotification():
             lab_smtp.quit()
         except SMTPException as error:
             self.log.error("Error: unable to send email : {err}".format(err=error))
-=======
->>>>>>> f12a1b8e92897ff70d667b8abc8cb119e8e7bb44
