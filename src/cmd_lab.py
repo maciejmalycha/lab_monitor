@@ -1,17 +1,19 @@
 import server
 import sys
 import argparse
+import logging
 
 def status(args):
-	pass
+	lab = server.Laboratory()
+	lab.status()
 
 def shutdown(args):
 	lab = server.Laboratory()
 	if args.force:
-		lab.log.info("Forced shutdown of lab ", "timeout =", args.timeout)
+		lab.log.info("Forced shutdown of lab with timeout =%s", args.timeout)
 		lab.force_shutdown(args.timeout)
 	else:
-		lab.log.info("Shutdown of lab", "timeout=", args.timeout)
+		lab.log.info("Shutdown of lab with timeout=%s", args.timeout)
 		lab.shutdown(args.timeout)
 
 parser = argparse.ArgumentParser(prog="lab", description='Manage laboratory')
