@@ -219,48 +219,95 @@ function drawChart(url, area){
     })
 }
 
+function modalConfirm(confirm_text, ok_button)
+{
+    var modal = $('<div class="modal fade">')
+        .append(
+            $('<div class="modal-dialog">')
+                .append(
+                    $('<div class="modal-content">')
+                        .append(
+                            $('<div class="modal-header">')
+                                .append(
+                                    $('<button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>')
+                                )
+                                .append(
+                                    $('<h4 class="modal-title">Confirm</h4>')
+                                )
+                        )
+                        .append(
+                            $('<div class="modal-body">')
+                                .html(confirm_text)
+                        )
+                        .append(
+                            $('<div class="modal-footer">')
+                                .append(
+                                    $('<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>')
+                                )
+                                .append(
+                                    ok_button
+                                )
+                        )
+                )
+        );
+        $('body').append(modal);
+        ok_button.on('click', function(){
+            modal.modal('hide');
+        });
+        modal.modal('show');
+}
+
 $(function(){
+    /*
+    There are two types of confirmable buttons/links.
+
+    First one is initialized by adding data-confirm attribute
+    to the tag. On click, the default event is prevented,
+    the confirm box pops out and the OK button is a copy
+    of the original button/link, minus data-confirm
+    and with CSS classes .btn.btn-danger.
+
+    The second type is initialized by adding data-trigger-confirm
+    attribute. On click, the box pops out and clicking
+    the OK button triggers "confirmed" event on the original
+    button or link.
+
+    Both listeners are attached to body, so they will work
+    even if the button is created later.
+
+    However, note that if you're creating the elements dynamically,
+    the data attributes cannot be assigned by $(el).data,
+    because the selectors will not work. You must use
+    $(el).attr or el.dataset.
+    */
     $('body').on('click', '[data-confirm]', function(e){
 
         e.preventDefault();
-        clone = $(this).clone()
-            .removeData('confirm')
+        var clone = $(this).clone()
+            .removeAttr('data-confirm')
             .attr('class', 'btn btn-danger')
             .html('OK');
 
-        var confirm_text = $(this).data('confirm')
+        var confirm_text = $(this).data('confirm');
 
-        var modal = $('<div class="modal fade">')
-            .append(
-                $('<div class="modal-dialog">')
-                    .append(
-                        $('<div class="modal-content">')
-                            .append(
-                                $('<div class="modal-header">')
-                                    .append(
-                                        $('<button type="button" class="close" data-dismiss="modal"><span aria-hidden="true">&times;</span><span class="sr-only">Close</span></button>')
-                                    )
-                                    .append(
-                                        $('<h4 class="modal-title">Confirm</h4>')
-                                    )
-                            )
-                            .append(
-                                $('<div class="modal-body">')
-                                    .html(confirm_text)
-                            )
-                            .append(
-                                $('<div class="modal-footer">')
-                                    .append(
-                                        $('<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>')
-                                    )
-                                    .append(
-                                        clone
-                                    )
-                            )
-                    )
-            );
-        $('body').append(modal);
-        modal.modal('show');
+        modalConfirm(confirm_text, clone);
+        
+    });
+
+    $('body').on('click', '[data-trigger-confirm]', function(e){
+        var orig = $(this);
+        var ok = $('<button>')
+            .attr('type', 'button')
+            .attr('class', 'btn btn-danger')
+            .html('OK')
+            .on('click', function(){
+                orig.trigger('confirmed');
+            });
+
+        var confirm_text = $(this).data('trigger-confirm');
+
+        modalConfirm(confirm_text, ok);
+        
     });
 });
 

@@ -44,18 +44,18 @@ $(function() {
                     {
                         var buttons = $('<span>').append(
                             $('<button>')
-                                .addClass('btn btn-sm btn-danger')
+                                .addClass('btn btn-xs btn-danger')
                                 .html('<i class="fa fa-power-off"></i>')
-                                //.data('confirm', 'Are you f**king serious?')
-                                .on('click', function(){
+                                .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .on('confirmed', function(){
                                     alert('Not today');
                                 })
                         ).append(' ').append(
                             $('<button>')
-                                .addClass('btn btn-sm btn-danger')
+                                .addClass('btn btn-xs btn-danger')
                                 .html('Force <i class="fa fa-power-off"></i>')
-                                //.data('confirm', 'Are you f**king serious?')
-                                .on('click', function(){
+                                .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .on('confirmed', function(){
                                     alert('Not today either');
                                 })
                         );
@@ -72,30 +72,52 @@ $(function() {
                     tbody.append(tr);
                 });
 
-                var shutdown_buttons = $('<span>').append(
+                var shutdown_buttons = $('<span>').append(' ').append(
                             $('<button>')
                                 .addClass('btn btn-sm btn-danger')
-                                .html('Shutdown')
-                                //.data('confirm', 'Are you f**king serious?')
-                                .on('click', function(){
+                                .html('<i class="fa fa-power-off"></i>')
+                                .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .on('confirmed', function(){
                                     alert('Not today');
                                 })
                         ).append(' ').append(
                             $('<button>')
                                 .addClass('btn btn-sm btn-danger')
-                                .html('Force shutdown')
-                                //.data('confirm', 'Are you f**king serious?')
-                                .on('click', function(){
+                                .html('Force <i class="fa fa-power-off"></i>')
+                                .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .on('confirmed', function(){
                                     alert('Not today either');
                                 })
                         );
                 
+                h3.append(shutdown_buttons);
                 div.append(h3);
                 table.append(tbody);
                 div.append(table);
-                div.append(shutdown_buttons);
+                div.append('<hr>');
                 $('#esxi-data').append(div);
             });
+
+            var shutdown_buttons = $('<div>').append('<div><strong>This rack:</strong></div>').append(
+                    $('<button>')
+                        .addClass('btn btn-lg btn-danger')
+                        .html('Shutdown')
+                        .attr('data-trigger-confirm', 'Are you f**king serious?')
+                        .on('confirmed', function(){
+                            alert('Not today');
+                        })
+                ).append(' ').append(
+                    $('<button>')
+                        .addClass('btn btn-lg btn-danger')
+                        .html('Force shutdown')
+                        .attr('data-trigger-confirm', 'Are you f**king serious?')
+                        .on('confirmed', function(){
+                            alert('Not today either');
+                        })
+                );
+
+            $('#esxi-data').append(shutdown_buttons);
+
         }).fail(function(){
             $('#esxi-data').html('<div class="alert alert-danger">Failed to load data! Please try again later.</div>');
         });
