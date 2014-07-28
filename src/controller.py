@@ -35,16 +35,24 @@ class ILoController:
 
         self.log.debug("Database opened")
 
-        self.servers = []
-        for serv in self.servers_dao.server_list():
+        def conn(serv):
             try:
                 conn = SSHiLoSensors(serv['addr'])
             except Exception as e:
                 self.log.error("Cannot connect to %s: %s", serv['addr'], e)
-                continue
+                raise
 
-            self.servers.append(conn)
             self.log.debug("Connected to %s", conn.host)
+            return conn
+
+        t0 = time.time()
+
+        connect = [gevent.spawn(conn, serv) for serv in self.servers_dao.server_list()]
+        gevent.joinall(connect)
+        self.servers = [job.value for job in connect if job.successful()]
+        
+        t = time.time()
+        self.log.debug("It took %.2f s to connect to %u hosts.", t-t0, len(self.servers))
 
         if len(self.servers)==0:
             self.log.info("Nothing to monitor")
