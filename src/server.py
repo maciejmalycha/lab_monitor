@@ -198,18 +198,11 @@ class Rack:
             self.log.handler_set = True
         self.log.info("Initialazing rack with id=%s", self.id)
 
-    def get_servers(self):
-        return database.ServersDAO().server_list(self.id)
+    def get_hypervisors_from_db(self):
+        return database.ServersDAO().hypervisor_list(self.id)
     
     def get_hypervisors_ready(self):
-        hyper_list = []
-        serv_list = self.get_servers()
-        for server in serv_list:
-            addr = server['addr']
-            if addr[-4:] == '-ilo':
-                addr = addr[0:-4]   #just to remove sufix '-ilo'
-            hyper_list.append(ESXiHypervisor(addr))
-        return hyper_list
+        return [ESXiHypervisor(hyperv['addr']) for hyperv in self.get_hypervisors_from_db()]
         
     def status(self):
         hyper_list = self.get_hypervisors_ready()

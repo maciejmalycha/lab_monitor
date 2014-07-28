@@ -4,7 +4,7 @@
 <ul class="nav nav-pills nav-stacked">
 
 {% for endpoint,title in [('config_servers', 'Servers')] %}
-    <li{{ ' class="active"'|safe if endpoint==request.url_rule.endpoint else '' }}><a href="{{ url_for(endpoint, server=server) }}">{{ title }}</a></li>
+    <li{{ ' class="active"'|safe if endpoint==request.url_rule.endpoint else '' }}><a href="{{ url_for(endpoint) }}">{{ title }}</a></li>
 {% endfor %}
 </ul>
 

@@ -47,9 +47,11 @@
            </li>
            {% endif %}
            <li{{ ' class="active"'|safe if request.url_rule.endpoint.startswith('config') else '' }}><a href="{{ url_for('config') }}">Configuration</a></li>
+           <li{{ ' class="active"'|safe if request.url_rule.endpoint.startswith('controller') else '' }}><a href="{{ url_for('controller') }}">Controller</a></li>
+           <li{{ ' class="active"'|safe if request.url_rule.endpoint.startswith('esxi') else '' }}><a href="{{ url_for('esxi', rack_id=0) }}">ESXi</a></li>
            <li{{ ' class="active"'|safe if 'shutdown'==request.url_rule.endpoint else '' }}><a href="{{ url_for('shutdown') }}" data-confirm="Do you really want to shutdown?">Shutdown</a></li>
          </ul>
-         <!--<p class="navbar-text navbar-right">Updated at 18:53:25</p>-->
+         <p class="navbar-text navbar-right"><span id="controller-status"></span></p>
        </div><!--/.nav-collapse -->
      </div>
    </div>
@@ -69,11 +71,12 @@
      </div>
    </div>
    {% endblock %}
+   <footer style="text-align:center; padding:20px 5px 5px 5px; color:#888;">&copy; Genesys 2014</footer>
 
    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
    <script src="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>   
-   <script src="{{ url_for('static', filename='drawchart.js') }}"></script>
+   <script src="{{ url_for('static', filename='scripts.js') }}"></script>
    {% block scripts %}
    {% endblock %}
  </body>

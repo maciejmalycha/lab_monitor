@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+
+{% block sidebar %}
+<ul class="nav nav-pills nav-stacked">
+
+{% for i in range(7) %}
+    <li{{ ' class="active"'|safe if rack_id==i else '' }}><a href="{{ url_for('esxi', rack_id=i) }}">Rack #{{ i+1 }}</a></li>
+{% endfor %}
+</ul>
+
+{% endblock %}
+
+
+{% block main %}
+
+<div id="esxi-data">
+<h3><i class="fa fa-spinner fa-spin"></i> loading...</h3>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="//code.highcharts.com/stock/highstock.js"></script>
+<script>
+$(function() {
+    esxi_data = function() {
+        $.getJSON('{{ url_for('json_esxi_rack', rack_id=rack_id) }}', function(d){
+            $('#esxi-data').empty();
+
+            if($.isEmptyObject(d))
+            {
+                $('#esxi-data').html('<div class="alert alert-info">There are no ESXi servers in this rack.</div>');
+                return;
+            }
+
+            $.each(d, function(name, hv){
+                var div = $('<div>');
+                var h3 = $('<h3>').html(name);
+                var table = $('<table class="table table-striped"><thead><tr><th>VM ID</th><th>Status</th><th>VMware Tools</th><th class="actions">Actions</th></tr></thead></table>');
+                var tbody = $('<tbody>');
+
+                $.each(hv, function(i,vm){
+                    if(vm.status)
+                    {
+                        var buttons = $('<span>').append(
+                            $('<button>')
+                                .addClass('btn btn-xs btn-danger')
+                                .prop('disabled', !vm.tools)
+                                .html('<i class="fa fa-power-off"></i>')
+                                .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .on('confirmed', function(){
+                                    alert('Not today');
+                                })
+                        ).append(' ').append(
+                            $('<button>')
+                                .addClass('btn btn-xs btn-danger')
+                                .html('Force <i class="fa fa-power-off"></i>')
+                                .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .on('confirmed', function(){
+                                    alert('Not today either');
+                                })
+                        );
+                    }
+                    else
+                        var buttons = '';
+
+                    var tr = $('<tr>')
+                        .append($('<td>').html(vm.id))
+                        .append($('<td>').html(vm.status?'<span class="text-primary"><i class="fa fa-fw fa-bolt"></i> Running</span>':'<span class="text-muted"><i class="fa fa-fw fa-power-off"></i> Powered off</span>'))
+                        .append($('<td>').html(vm.tools?'<span class="text-success"><i class="fa fa-fw fa-check"></i> Installed</span>':'<span class="text-danger"><i class="fa fa-fw fa-times"></i> Not installed</span>'))
+                        .append($('<td>').addClass('actions').append(buttons));
+
+                    tbody.append(tr);
+                });
+
+                var shutdown_buttons = $('<span>').append(' ').append(
+                            $('<button>')
+                                .addClass('btn btn-sm btn-danger')
+                                .html('<i class="fa fa-power-off"></i>')
+                                .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .on('confirmed', function(){
+                                    alert('Not today');
+                                })
+                        ).append(' ').append(
+                            $('<button>')
+                                .addClass('btn btn-sm btn-danger')
+                                .html('Force <i class="fa fa-power-off"></i>')
+                                .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .on('confirmed', function(){
+                                    alert('Not today either');
+                                })
+                        );
+                
+                h3.append(shutdown_buttons);
+                div.append(h3);
+                table.append(tbody);
+                div.append(table);
+                div.append('<hr>');
+                $('#esxi-data').append(div);
+            });
+
+            var shutdown_buttons = $('<div>').append('<div><strong>This rack:</strong></div>').append(
+                    $('<button>')
+                        .addClass('btn btn-lg btn-danger')
+                        .html('Shutdown')
+                        .attr('data-trigger-confirm', 'Are you f**king serious?')
+                        .on('confirmed', function(){
+                            alert('Not today');
+                        })
+                ).append(' ').append(
+                    $('<button>')
+                        .addClass('btn btn-lg btn-danger')
+                        .html('Force shutdown')
+                        .attr('data-trigger-confirm', 'Are you f**king serious?')
+                        .on('confirmed', function(){
+                            alert('Not today either');
+                        })
+                );
+
+            $('#esxi-data').append(shutdown_buttons);
+
+        }).fail(function(){
+            $('#esxi-data').html('<div class="alert alert-danger">Failed to load data! Please try again later.</div>');
+        });
+    };
+
+    esxi_data();
+});
+</script>
+{% endblock %}

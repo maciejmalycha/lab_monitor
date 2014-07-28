@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+
+{% block sidebar %}
+<ul class="nav nav-pills nav-stacked">
+
+{% for endpoint,title in [('controller', 'Controller')] %}
+    <li{{ ' class="active"'|safe if endpoint==request.url_rule.endpoint else '' }}><a href="{{ url_for(endpoint) }}">{{ title }}</a></li>
+{% endfor %}
+</ul>
+
+{% endblock %}
+
+{% block main %}
+<style id="log-filter-css"></style>
+
+<h3>Controller</h3>
+
+<div class="btn-toolbar">
+    <div class="btn-group">
+        <button class="btn btn-success" id="controller-start"><i class="fa fa-play"></i> Start</button>
+        <button class="btn btn-danger" id="controller-stop"><i class="fa fa-stop"></i> Stop</button>
+        <button class="btn btn-primary" id="controller-restart"><i class="fa fa-refresh"></i> Restart</button>
+    </div>
+    <div class="btn-group">
+        <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"><i id="log-filter-icon"></i> Filter <span class="caret"></span></button>
+        <ul class="dropdown-menu" id="log-filter-menu" role="menu"></ul>
+        <button class="btn btn-default" id="clear-log">Clear log</button>
+    </div>
+</div><br>
+
+<div class="well" id="log-area" style="height:400px; overflow:auto"></div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+
+log_icons = {
+    'DEBUG': 'fa fa-fw fa-check',
+    'INFO': 'fa fa-fw fa-info',
+    'ERROR': 'fa fa-fw fa-exclamation',
+    'WARNING': 'fa fa-fw fa-warning',
+    'CRITICAL': 'fa fa-fw fa fa-bomb'
+};
+
+function logmessage(e){
+    var msg = $.parseJSON(e.data);
+    if(msg.level == 'STATECHANGE')
+        return
+
+    var date = new Date(msg.time*1000);
+    var h = ('0'+date.getHours()).slice(-2);
+    var m = ('0'+date.getMinutes()).slice(-2);
+    var s = ('0'+date.getSeconds()).slice(-2);
+
+    var time = h+':'+m+':'+s;
+
+    $('#log-area').append(
+        $('<div>').append(
+            $('<i>').addClass(log_icons[msg.level])
+                .attr('title', time)
+                .tooltip({placement:'left'})
+        ).append(msg.message)
+        .addClass('log-'+msg.level)
+    );
+
+    $('#log-area').animate({
+        scrollTop: $('#log-area').get(0).scrollHeight
+    }, 'fast');
+
+}
+
+stream.addEventListener('message', logmessage, false);
+
+$(function(){
+
+    $('#controller-start').on('click', function(){
+        $.get('{{ url_for('controller_start') }}');
+    });
+
+    $('#controller-stop').on('click', function(){
+        $.get('{{ url_for('controller_stop') }}');
+    });
+
+    $('#controller-restart').on('click', function(){
+        $.get('{{ url_for('controller_restart') }}');
+    });
+
+    var flag = true;
+    $.each(log_icons, function(level, icon_class){
+        if(flag) // set filter icon to the first one
+        {
+            $('#log-filter-icon').attr('class', icon_class);
+            flag = false;
+        }
+
+        $('#log-filter-menu').append(
+            $('<li>').append(
+                $('<a>').append(
+                    $('<i>').addClass(log_icons[level])
+                ).append(level[0]+level.slice(1).toLowerCase())
+                .attr('href', '#')
+                .on('click', function(e){
+                    e.preventDefault();
+                    $('#log-filter-menu .active').removeClass('active');
+                    $(this).closest('li').addClass('active');
+                    $('#log-filter-icon').attr('class', icon_class);
+
+                    var css = '';
+                    $.each(log_icons, function(i){
+                        if(i==level)
+                            return false;
+
+                        css+='.log-'+i+' {display:none} ';
+                    });
+                    $('#log-filter-css').html(css);
+
+                })
+            ).addClass(level=='DEBUG'?'active':'')
+        )
+    });
+
+    $('#clear-log').on('click', function(){
+        $('#log-area').empty();
+    });
+
+
+})
+</script>
+
+{% endblock %}
