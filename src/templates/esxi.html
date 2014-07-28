@@ -45,6 +45,7 @@ $(function() {
                         var buttons = $('<span>').append(
                             $('<button>')
                                 .addClass('btn btn-xs btn-danger')
+                                .prop('disabled', !vm.tools)
                                 .html('<i class="fa fa-power-off"></i>')
                                 .attr('data-trigger-confirm', 'Are you f**king serious?')
                                 .on('confirmed', function(){
