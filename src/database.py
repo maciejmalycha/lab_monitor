@@ -3,7 +3,7 @@
 from contextlib import contextmanager
 
 from sqlalchemy import *
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship, backref, aliased
 from sqlalchemy.ext.declarative import declarative_base
 
 from datetime import datetime, timedelta
@@ -38,6 +38,7 @@ class Server(Base):
     rack = Column(Integer)
     size = Column(Integer)
     position = Column(Integer)
+    hypervisor = relationship('Hypervisor', uselist=False, backref="hypervisors")
 
     def __init__(self, addr, type_, rack, size, position):
         self.addr = addr
@@ -54,6 +55,7 @@ class Hypervisor(Base):
     addr = Column(String(30))
     type_ = Column(String(30))
     server_id = Column(Integer, ForeignKey('servers.id_'))
+    server = relationship('Server', uselist=False, backref="servers")
 
     def __init__(self, addr, type_, server_id):
         self.addr = addr
@@ -156,7 +158,6 @@ class ServersDAO(DAO):
     def server_list(self, rack=None, with_health=False):
         """Returns all monitored servers as a list of dictionaries"""
         with session_scope() as session:
-
             data = []
 
             q = session.query(Server).filter(Server.rack==rack if rack is not None else True)
@@ -205,6 +206,44 @@ class ServersDAO(DAO):
 
             for field, new in update.iteritems():
                 setattr(serv, field, new)
+
+
+    def hypervisor_list(self, rack=None):
+        with session_scope() as session:
+            data = []
+
+            serv = aliased(Server)
+
+            q = session.query(Hypervisor).join(serv, Hypervisor.server).filter(serv.rack==rack if rack is not None else True)
+            for hyperv in q:
+                row = {'addr':hyperv.addr, 'type':hyperv.type_, 'ilo_addr':hyperv.server.addr, 'rack':hyperv.server.rack}
+                data.append(row)
+
+            return data
+
+    def hypervisor_create(self, addr, type_, server_id):
+        with session_scope() as session:
+            session.add(Hypervisor(addr, type_, server_id))
+
+    def hypervisor_update(self, id_=None, addr=None, update={}):
+        with session_scope() as session:
+            if id_ is not None:
+                hyperv = session.query(Hypervisor).get(id_)
+            elif addr is not None:
+                hyperv = session.query(Hypervisor).filter(Hypervisor.addr==addr)[0]
+
+            for field, new in update.iteritems():
+                setattr(hyperv, field, new)
+
+    def hypervisor_delete(self, id_=None, addr=None):
+        with session_scope() as session:
+            if id_ is not None:
+                hyperv = session.query(Hypervisor).get(id_)
+            elif addr is not None:
+                hyperv = session.query(Hypervisor).filter(Hypervisor.addr==addr)[0]
+
+            session.delete(hyperv)
+
 
     def get_laboratory(self):
         pass
