@@ -94,7 +94,7 @@
 {% block scripts %}
 <script>
 $(function(){
-    $('.actions a').tooltip();
+    $('.actions a, .actions button').tooltip();
     $('#create-server-form, #update-server-form').ajaxSubmit();
     $('.wait').hide();
 

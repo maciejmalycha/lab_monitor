@@ -48,16 +48,24 @@ $(function() {
                                 .prop('disabled', !vm.tools)
                                 .html('<i class="fa fa-power-off"></i>')
                                 .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .data('loading-text', 'Shutting down...')
                                 .on('confirmed', function(){
-                                    alert('Not today');
+                                    $(this).button('loading');
+                                    $.post('/esxi/server/'+name+'/'+vm.id+'/shutdown', function(){
+                                        esxi_data();
+                                    });
                                 })
                         ).append(' ').append(
                             $('<button>')
                                 .addClass('btn btn-xs btn-danger')
                                 .html('Force <i class="fa fa-power-off"></i>')
                                 .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .data('loading-text', 'Forcing shutdown...')
                                 .on('confirmed', function(){
-                                    alert('Not today either');
+                                    $(this).button('loading');
+                                    $.post('/esxi/server/'+name+'/'+vm.id+'/force_shutdown', function(){
+                                        esxi_data();
+                                    });
                                 })
                         );
                     }
@@ -78,16 +86,24 @@ $(function() {
                                 .addClass('btn btn-sm btn-danger')
                                 .html('<i class="fa fa-power-off"></i>')
                                 .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .data('loading-text', 'Shutting down...')
                                 .on('confirmed', function(){
-                                    alert('Not today');
+                                    $(this).button('loading');
+                                    $.post('/esxi/server/'+name+'/shutdown', function(){
+                                        esxi_data();
+                                    });
                                 })
                         ).append(' ').append(
                             $('<button>')
                                 .addClass('btn btn-sm btn-danger')
                                 .html('Force <i class="fa fa-power-off"></i>')
                                 .attr('data-trigger-confirm', 'Are you f**king serious?')
+                                .data('loading-text', 'Forcing shutdown...')
                                 .on('confirmed', function(){
-                                    alert('Not today either');
+                                    $(this).button('loading');
+                                    $.post('/esxi/server/'+name+'/force_shutdown', function(){
+                                        esxi_data();
+                                    });
                                 })
                         );
                 
@@ -104,16 +120,24 @@ $(function() {
                         .addClass('btn btn-lg btn-danger')
                         .html('Shutdown')
                         .attr('data-trigger-confirm', 'Are you f**king serious?')
+                        .data('loading-text', 'Shutting down...')
                         .on('confirmed', function(){
-                            alert('Not today');
+                            $(this).button('loading');
+                            $.post('/esxi/rack/{{rack_id}}/shutdown', function(){
+                                esxi_data();
+                            });
                         })
                 ).append(' ').append(
                     $('<button>')
                         .addClass('btn btn-lg btn-danger')
                         .html('Force shutdown')
                         .attr('data-trigger-confirm', 'Are you f**king serious?')
+                        .data('loading-text', 'Forcing shutdown...')
                         .on('confirmed', function(){
-                            alert('Not today either');
+                            $(this).button('loading');
+                            $.post('/esxi/rack/{{rack_id}}/force_shutdown', function(){
+                                esxi_data();
+                            });
                         })
                 );
 

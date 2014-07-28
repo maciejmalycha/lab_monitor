@@ -162,7 +162,7 @@ class ServersDAO(DAO):
 
             q = session.query(Server).filter(Server.rack==rack if rack is not None else True)
             for serv in q:
-                row = {'addr':serv.addr, 'type':serv.type_, 'rack':serv.rack, 'size':serv.size, 'position':serv.position}
+                row = {'id':serv.id_, 'addr':serv.addr, 'type':serv.type_, 'rack':serv.rack, 'size':serv.size, 'position':serv.position}
                 if with_health:
                     try:
                         power_units = session.query(PowerUnits).filter(PowerUnits.server==serv.addr).group_by(PowerUnits.power_supply).order_by(PowerUnits.power_supply)
@@ -180,6 +180,14 @@ class ServersDAO(DAO):
                 data.append(row)
 
             return data
+
+    def server_has_hypervisor(self, id_, except_for=None):
+        with session_scope() as session:
+            q = session.query(Server).join(Server.hypervisor).filter(Server.id_==id_)
+            if except_for is None:
+                return q.count()
+            else:
+                return q.count() and q[0].hypervisor.addr!=except_for
 
     def server_position(self, rack, position0, position1, except_for=None):
         """Searches for servers on given position"""

@@ -19,7 +19,6 @@ controller_inst = None # ILoController instance
 controller_gevent = None # Greenlet that started the ILoController 
 handler = ssehandler.SSEHandler()
 
-create_shutdown_routes = False
 shutdown_timeout = 10
 
 @app.route('/')
@@ -151,48 +150,102 @@ def config_servers_delete(server):
         return jsonify(error=str(e))
 
 
+@app.route('/config/esxi')
+def config_hypervisors():
+    servers = servers_dao.server_list()
+    hypervisors = servers_dao.hypervisor_list()
+    return render_template('config_esxi.html', servers=servers, hypervisors=hypervisors)
+
+@app.route('/config/esxi/create', methods=['POST'])
+def config_hypervisors_create():
+    try:
+        addr = request.form['addr']
+        type_ = request.form['type']
+        server_id = request.form['server_id']
+
+        print "server_id=%s"%server_id
+
+        if servers_dao.server_has_hypervisor(server_id):
+            raise ValueError("Selected iLo server already has a corresponding hypervisor")
+
+        # is this host reachable?
+        # (it takes the most time, so it's better to check other conditions first)
+        hyperv = ESXiHypervisor(addr)
+
+        servers_dao.hypervisor_create(addr, type_, server_id)
+        return redirect(url_for('config_hypervisors'))
+
+    except BaseException as e:
+        return jsonify(error=str(e))
+
+@app.route('/config/esxi/update/', methods=['POST'])
+def config_hypervisors_update():
+    try:
+        addr = request.form['addr']
+        type_ = request.form['type']
+        server_id = request.form['server_id']
+
+        if servers_dao.server_has_hypervisor(server_id, addr):
+            raise ValueError("Selected iLo server already has a different corresponding hypervisor")
+
+        servers_dao.hypervisor_update(addr=addr, update={'type_':type_, 'server_id':server_id})
+        return redirect(url_for('config_hypervisors'))
+
+    except BaseException as e:
+        return jsonify(error=str(e))
+
+@app.route('/config/esxi/delete/<hypervisor>')
+def config_hypervisors_delete(hypervisor):
+    try:
+        servers_dao.hypervisor_delete(addr=hypervisor)
+        controller_restart()
+        return redirect(url_for('config_hypervisors'))
+
+    except BaseException as e:
+        return jsonify(error=str(e))
+
+
 @app.route('/esxi/rack/<int:rack_id>')
 def esxi(rack_id=0):
     servers = servers_dao.server_list()
     return render_template('esxi.html', servers=servers, rack_id=rack_id)
 
 
-if create_shutdown_routes:
-    @app.route('/esxi/rack/<int:rack_id>/shutdown')
-    def esxi_shutdown_rack(rack_id):
-        rack_inst = Rack(rack_id)
-        force = rack_inst.shutdown(shutdown_timeout)
-        return ' '
+@app.route('/esxi/rack/<int:rack_id>/shutdown', methods=['POST'])
+def esxi_shutdown_rack(rack_id):
+    rack_inst = Rack(rack_id)
+    force = rack_inst.shutdown(shutdown_timeout)
+    return ' '
 
-    @app.route('/esxi/rack/<int:rack_id>/force_shutdown')
-    def esxi_force_shutdown_rack(rack_id):
-        rack_inst = Rack(rack_id)
-        rack_inst.force_shutdown(shutdown_timeout)
-        return ' '
+@app.route('/esxi/rack/<int:rack_id>/force_shutdown', methods=['POST'])
+def esxi_force_shutdown_rack(rack_id):
+    rack_inst = Rack(rack_id)
+    rack_inst.force_shutdown(shutdown_timeout)
+    return ' '
 
-    @app.route('/esxi/server/<server>/shutdown')
-    def esxi_shutdown_server(server):
-        hyperv = ESXiHypervisor(server)
-        hyperv.shutdown(shutdown_timeout)
-        return ' '
+@app.route('/esxi/server/<server>/shutdown', methods=['POST'])
+def esxi_shutdown_server(server):
+    hyperv = ESXiHypervisor(server)
+    hyperv.shutdown(shutdown_timeout)
+    return ' '
 
-    @app.route('/esxi/server/<server>/force_shutdown')
-    def esxi_force_shutdown_server(server):
-        hyperv = ESXiHypervisor(server)
-        hyperv.force_shutdown(shutdown_timeout)
-        return ' '
+@app.route('/esxi/server/<server>/force_shutdown', methods=['POST'])
+def esxi_force_shutdown_server(server):
+    hyperv = ESXiHypervisor(server)
+    hyperv.force_shutdown(shutdown_timeout)
+    return ' '
 
-    @app.route('/esxi/server/<server>/<int:vm>/shutdown')
-    def esxi_shutdown_vm(server, vm):
-        hyperv = ESXiHypervisor(server)
-        hyperv.shutdown_vm(vm)
-        return ' '
+@app.route('/esxi/server/<server>/<int:vm>/shutdown', methods=['POST'])
+def esxi_shutdown_vm(server, vm):
+    hyperv = ESXiHypervisor(server)
+    hyperv.shutdown_vm(vm)
+    return ' '
 
-    @app.route('/esxi/server/<server>/<int:vm>/force_shutdown')
-    def esxi_force_shutdown_vm(server, vm):
-        hyperv = ESXiHypervisor(server)
-        hyperv.force_shutdown_vm(vm)
-        return ' '
+@app.route('/esxi/server/<server>/<int:vm>/force_shutdown', methods=['POST'])
+def esxi_force_shutdown_vm(server, vm):
+    hyperv = ESXiHypervisor(server)
+    hyperv.force_shutdown_vm(vm)
+    return ' '
 
 
 
