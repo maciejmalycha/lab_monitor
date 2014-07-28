@@ -19,6 +19,9 @@ controller_inst = None # ILoController instance
 controller_gevent = None # Greenlet that started the ILoController 
 handler = ssehandler.SSEHandler()
 
+create_shutdown_routes = False
+shutdown_timeout = 10
+
 @app.route('/')
 def dashboard():
     servers = servers_dao.server_list()
@@ -154,6 +157,44 @@ def esxi(rack_id=0):
     return render_template('esxi.html', servers=servers, rack_id=rack_id)
 
 
+if create_shutdown_routes:
+    @app.route('/esxi/rack/<int:rack_id>/shutdown')
+    def esxi_shutdown_rack(rack_id):
+        rack_inst = Rack(rack_id)
+        force = rack_inst.shutdown(shutdown_timeout)
+        return ' '
+
+    @app.route('/esxi/rack/<int:rack_id>/force_shutdown')
+    def esxi_force_shutdown_rack(rack_id):
+        rack_inst = Rack(rack_id)
+        rack_inst.force_shutdown(shutdown_timeout)
+        return ' '
+
+    @app.route('/esxi/server/<server>/shutdown')
+    def esxi_shutdown_server(server):
+        hyperv = ESXiHypervisor(server)
+        hyperv.shutdown(shutdown_timeout)
+        return ' '
+
+    @app.route('/esxi/server/<server>/force_shutdown')
+    def esxi_force_shutdown_server(server):
+        hyperv = ESXiHypervisor(server)
+        hyperv.force_shutdown(shutdown_timeout)
+        return ' '
+
+    @app.route('/esxi/server/<server>/<int:vm>/shutdown')
+    def esxi_shutdown_vm(server, vm):
+        hyperv = ESXiHypervisor(server)
+        hyperv.shutdown_vm(vm)
+        return ' '
+
+    @app.route('/esxi/server/<server>/<int:vm>/force_shutdown')
+    def esxi_force_shutdown_vm(server, vm):
+        hyperv = ESXiHypervisor(server)
+        hyperv.force_shutdown_vm(vm)
+        return ' '
+
+
 
 
 
@@ -203,7 +244,7 @@ def controller_start():
 @app.route("/controller/stop")
 def controller_stop():
     global controller_inst
-    if controller_inst is not None:
+    if controller_inst is not None and controller_inst.loop:
         gevent.spawn(cstop)
         return "stopping"
     return "already stopped"
@@ -211,7 +252,7 @@ def controller_stop():
 @app.route("/controller/restart")
 def controller_restart():
     global controller_inst
-    if controller_inst is not None:
+    if controller_inst is not None and controller_inst.loop:
         gevent.spawn(crestart)
         return "restarting"
     return "not started"
@@ -277,8 +318,8 @@ def json_esxi_rack(rack_id):
     vms = {}
     for hv in hypervisors:
         hv_vms = []
-        for vm in hv.status():
-            hv_vms.append({'id':vm, 'status': hv.get_status(vm), 'tools': hv.check_vmwaretools(vm)})
+        for vm, status in hv.status().iteritems():
+            hv_vms.append({'id':vm, 'status': status, 'tools': hv.check_vmwaretools(vm)})
 
         vms[hv.addr] = hv_vms
     return jsonify(**vms)
