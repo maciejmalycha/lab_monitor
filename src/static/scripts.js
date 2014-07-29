@@ -27,7 +27,6 @@ $.fn.ajaxSubmit = function() {
     });
 }
 
-
 function rackDiagram(ctx, map, url_template, rack) {
     var racks = 7;
     var units = 42;
@@ -94,6 +93,7 @@ function rackDiagram(ctx, map, url_template, rack) {
                 .attr('coords', [x,y,x+w,y+h].join(','))
                 .attr('href', url_template.replace(/_/, server.addr))
                 .attr('title', server.addr)
+                .tooltip()
         )
 
         // server shape
@@ -126,7 +126,7 @@ function rackDiagram(ctx, map, url_template, rack) {
         ctx.textBaseline = 'bottom';
         // wait! the text may be too big for current canvas size
         var text_size = ctx.measureText(server.addr);
-        if(text_size.width<rack_width)
+        if(text_size.width<rack_width && h>25)
         {
             ctx.fillText(server.addr, x+rack_width/2, y+h-2);
         }
@@ -135,8 +135,8 @@ function rackDiagram(ctx, map, url_template, rack) {
         ctx.font = '20px "Source Sans Pro"';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#111';
-        ctx.textBaseline = 'hanging';
-        ctx.fillText(server.temperature, x+rack_width/2, y);
+        ctx.textBaseline = 'top';
+        ctx.fillText(server.temperature, x+rack_width/2, y-4);
 
     });
 }
