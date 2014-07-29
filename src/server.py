@@ -290,116 +290,114 @@ class EmailNotification():
         self.gmail_smtp_port = 587
         self.text_subtype = "plain"
         self.email_password = ""
-        
-"""BEWARE
-ABOSULTELY DISGUSTING BEGINS HERE
-ALSO ITS NOT FINISHED YET"""
 
-    def send_communication(self,signal):
+#BEWARE ABOSULTELY DISGUSTING CODE BEGINS HERE ALSO ITS NOT FINISHED YET
+
+    def send_communication(self,signal, server, datetime):
         if signal[2] == "restored":
-            comm_restored = "Communication with server {server} restored."
+            comm_restored = "Communication with server {server} restored.".format(server)
             return comm_restored
         elif signal[2] == "lost":
-            comm_lost = "Communication with server {server} lost. Last reading from {datetime}."
+            comm_lost = "Communication with server {server} lost. Last reading from {datetime}.".format(server, datetime)
             return comm_lost
 
-    def send_server_power(self,signal):
+    def send_server_power(self,signal, server):
         if signal[2] == "restored":
-            power_server_restored = "Power restored in server {server}."
+            power_server_restored = "Power restored in server {server}.".format(server)
             return power_server_restored
         elif signal[2] == "partial_loss":
-            power_server_partial_loss = "Partial power loss in server {server}. Suspected PDU failure."
+            power_server_partial_loss = "Partial power loss in server {server}. Suspected PDU failure.".format(server)
             return power_server_partial_loss
     
-    def send_rack_power(self,signal):
+    def send_rack_power(self,signal, rack):
         if signal[2] == "partial_loss":
             if signal[3] == "UPS":   
-                power_rack_partial_loss_UPS = "Partial power loss in rack {rack}. Suspected UPS failure."
+                power_rack_partial_loss_UPS = "Partial power loss in rack {rack}. Suspected UPS failure.".format(rack)
                 return power_rack_partial_loss_UPS
             elif signal[3] == "grid":
-                power_rack_partial_loss_grid = "Partial power loss in rack {rack}. Suspected power grid failure."
+                power_rack_partial_loss_grid = "Partial power loss in rack {rack}. Suspected power grid failure.".format(rack)
                 return power_rack_partial_loss_grid
         elif signal[2] == "restored":
-            power_rack_restored = "Power restored in rack {rack}."
+            power_rack_restored = "Power restored in rack {rack}.".format(rack)
             return power_rack_restored
 
-    def send_lab_power(self,signal):
+    def send_lab_power(self,signal, timeout):
         if signal[2] == "partial_loss":
-            power_lab_partial_loss = "Partial power loss in laboratory. Suspected grid failure. Shutdown in {number} minutes."
+            power_lab_partial_loss = "Partial power loss in laboratory. Suspected grid failure. Shutdown in {number} minutes.".format(timeout)
             return power_lab_partial_loss
         elif signal[2] == "restored":
             power_lab_restored = "Power restored in laboratory. Shutdown aborted."
             return power_lab_restored
 
-    def send_server_temperature(self,signal):
+    def send_server_temperature(self,signal, server, number):
         if signal[2] == "status":
             if signal[3] == "raised":
-                temp_server_status_raise = "Inlet temperature in server {server} reached {number}C."
+                temp_server_status_raise = "Inlet temperature in server {server} reached {number}C.".format(server, number)
                 return temp_server_status_raise
             elif signal[3] == "dropped":
-                temp_server_status_drop = "Inlet temperature in server {server} dropped below {number}C."
+                temp_server_status_drop = "Inlet temperature in server {server} dropped below {number}C.".format(server, number)
                 return temp_server_status_drop
         elif signal[2] == "shutdown":
-            temp_server_shutdown = "Inlet temperature in server {server} reached {number}C. Shutting down the server."
+            temp_server_shutdown = "Inlet temperature in server {server} reached {number}C. Shutting down the server.".format(server, number)
             return temp_server_shutdown
     
-    def send_rack_temperature(self,signal):
+    def send_rack_temperature(self,signal, rack, number):
         if signal[2] == "status":
             if signal[3] == "raised":
-                temp_rack_status_raise = "Inlet temperature in rack {rack} reached {number}C."
+                temp_rack_status_raise = "Inlet temperature in rack {rack} reached {number}C.".format(rack, number)
                 return temp_rack_status_raise
             elif signal[3] == "dropped":
-                temp_rack_status_drop = "Inlet temperature in rack {rack} dropped below {number}C."
+                temp_rack_status_drop = "Inlet temperature in rack {rack} dropped below {number}C.".format(rack, number)
                 return temp_rack_status_drop
         elif signal[2] == "shutdown":
-            temp_rack_shutdown = "Inlet temperature in rack {rack} reached {number}C. Shutting down the rack."
+            temp_rack_shutdown = "Inlet temperature in rack {rack} reached {number}C. Shutting down the rack.".format(rack, number)
             return temp_rack_shutdown
     
-    def send_lab_temperature(self,signal):
+    def send_lab_temperature(self,signal, number):
         if signal[2] == "status":
             if signal[3] == "raised":
-                temp_lab_status_raise = "Inlet temperature in laboratory reached {number}C."
+                temp_lab_status_raise = "Inlet temperature in laboratory reached {number}C.".format(number)
                 return temp_lab_status_raise
             elif signal[3] == "dropped":
-                temp_lab_status_drop = "Inlet temperature in laboratory dropped below {number}C."
+                temp_lab_status_drop = "Inlet temperature in laboratory dropped below {number}C.".format(number)
                 return temp_lab_status_drop
         elif signal[2] == "shutdown":
-            temp_lab_shutdown = "Inlet temperature in laboratory reached {number}C. Shutting down the laboratory."
+            temp_lab_shutdown = "Inlet temperature in laboratory reached {number}C. Shutting down the laboratory.".format(number)
             return temp_lab_shutdown
 
-    def send_shutdown(self,signal):
+    def send_shutdown(self, signal, server):
         if signal[2] == "init":
-            shutdown_server = "Shutting down server {server}."
+            shutdown_server = "Shutting down server {server}.".format(server)
             return shutdown_server
         elif signal[2] == "completed":
-            shutdown_server_status = "Server {server} shutdown completed."
+            shutdown_server_status = "Server {server} shutdown completed.".format(server)
             return shutdown_server_status
 
-    def get_notification(self, signal):
+    def get_notification(self, signal, pos1, pos2):
         if signal[0] == "communication":
-            return send_communication(signal)
+            return self.send_communication(signal, pos1, pos2)
         elif signal[0] == "power":
             if signal[1] == "server":
-                return send_server_power(signal)
+                return self.send_server_power(signal, pos1)
             elif signal[1] == "rack":
-                return send_rack_power(signal)
+                return self.send_rack_power(signal, pos1)
             elif signal[1] == "lab":
-                return send_lab_power(signal)
+                return self.send_lab_power(signal, pos1)
         elif signal[0] == "temperature":
             if signal[1] == "server":
-                return send_server_temperature(signal)
+                return self.send_server_temperature(signal, pos1, pos2)
             elif signal[1] == "rack":
-                return send_rack_temperature(signal)
+                return self.send_rack_temperature(signal, pos1, pos2)
             elif signal[1] == "lab":
-                return send_lab_temperature(signal)
+                return self.send_lab_temperature(signal, pos1)
         elif signal[0] == "shutdown":
-            return send_shutdown(signal)
+            return self.send_shutdown(signal, pos1)
         else:
             return "wrong signal construction"
 
-    def send_mail(self, signal):
+    def send_mail(self, signal, pos1, pos2):
         """Basing on signal we recieve, we must decide what kind of notfication we want to send"""
-        msg = MIMEText(self.get_notification(signal), self.text_subtype)
+        msg = MIMEText(self.get_notification(signal, pos1, pos2), self.text_subtype)
         msg["Subject"] = self.email_subject
         msg["To"] = self.email_receivers
 
