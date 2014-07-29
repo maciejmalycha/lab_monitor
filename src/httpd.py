@@ -1,31 +1,48 @@
-from flask import *
+import logging, logging.handlers
 
+from flask import *
+import gevent
+from gevent.wsgi import WSGIServer
+
+from sse import EventStream
 from database import *
 from sensors import SSHiLoSensors
 from controller import ILoController
 from server import *
 
-import ssehandler
-import gevent
-from gevent.wsgi import WSGIServer
+# configure logging
+baselog = logging.getLogger('lab_monitor')
+baselog.setLevel(logging.INFO)
+
+format = logging.Formatter("%(asctime)s  %(levelname)-8s %(name)-36s %(message)s", "%H:%M:%S")
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.WARNING)
+ch.setFormatter(format)
+baselog.addHandler(ch)
+
+rfh = logging.handlers.TimedRotatingFileHandler('../logs/lab_monitor', 'midnight')
+rfh.setLevel(logging.INFO)
+rfh.setFormatter(format)
+baselog.addHandler(rfh)
 
 
-servers_dao, sensors_dao = ServersDAO(), SensorsDAO()
-
+# set up Flask and some globals
 app = Flask(__name__)
-app.debug = True
-app.jinja_env.filters['unsafejson'] = lambda v: json.dumps(v)
+app.jinja_env.filters['unsafejson'] = lambda v: json.dumps(v) # encode to JSON and escape special chars
 controller_inst = None # ILoController instance
 controller_gevent = None # Greenlet that started the ILoController 
-handler = ssehandler.SSEHandler()
-
 shutdown_timeout = 10
+
+stream = EventStream()
+
+# connect to the database
+servers_dao, sensors_dao = ServersDAO(), SensorsDAO()
 
 @app.route('/')
 def dashboard():
     servers = servers_dao.server_list()
     return render_template('dashboard.html', servers=servers)
-
 
 @app.route('/status')
 def status0():
@@ -103,7 +120,7 @@ def config_servers_create():
         controller_restart()
         return redirect(url_for('config_servers'))
 
-    except BaseException as e:
+    except Exception as e:
         return jsonify(error=str(e))
 
 @app.route('/config/servers/update/', methods=['POST'])
@@ -136,7 +153,7 @@ def config_servers_update():
         controller_restart()
         return redirect(url_for('config_servers'))
 
-    except BaseException as e:
+    except Exception as e:
         return jsonify(error=str(e))
 
 @app.route('/config/servers/delete/<server>')
@@ -146,7 +163,7 @@ def config_servers_delete(server):
         controller_restart()
         return redirect(url_for('config_servers'))
 
-    except BaseException as e:
+    except Exception as e:
         return jsonify(error=str(e))
 
 
@@ -175,7 +192,7 @@ def config_hypervisors_create():
         servers_dao.hypervisor_create(addr, type_, server_id)
         return redirect(url_for('config_hypervisors'))
 
-    except BaseException as e:
+    except Exception as e:
         return jsonify(error=str(e))
 
 @app.route('/config/esxi/update/', methods=['POST'])
@@ -191,7 +208,7 @@ def config_hypervisors_update():
         servers_dao.hypervisor_update(addr=addr, update={'type_':type_, 'server_id':server_id})
         return redirect(url_for('config_hypervisors'))
 
-    except BaseException as e:
+    except Exception as e:
         return jsonify(error=str(e))
 
 @app.route('/config/esxi/delete/<hypervisor>')
@@ -201,7 +218,7 @@ def config_hypervisors_delete(hypervisor):
         controller_restart()
         return redirect(url_for('config_hypervisors'))
 
-    except BaseException as e:
+    except Exception as e:
         return jsonify(error=str(e))
 
 
@@ -210,7 +227,7 @@ def esxi(rack_id=0):
     servers = servers_dao.server_list()
     return render_template('esxi.html', servers=servers, rack_id=rack_id)
 
-
+# danger zone
 @app.route('/esxi/rack/<int:rack_id>/shutdown', methods=['POST'])
 def esxi_shutdown_rack(rack_id):
     rack_inst = Rack(rack_id)
@@ -246,24 +263,14 @@ def esxi_force_shutdown_vm(server, vm):
     hyperv = ESXiHypervisor(server)
     hyperv.force_shutdown_vm(vm)
     return ' '
-
-
-
-
-
-@app.route('/controller')
-def controller():
-    servers = servers_dao.server_list()
-    return render_template('controller.html', servers=servers)
-
-
+# /danger zone
 
 def cstart():
     global controller_inst
-    global handler
+    global stream
     global servers_dao, sensors_dao
     controller_inst = ILoController()
-    controller_inst.log.addHandler(handler)
+    controller_inst.state_stream = stream
     controller_inst.servers_dao = servers_dao
     controller_inst.sensors_dao = sensors_dao
     controller_inst.start()
@@ -283,13 +290,13 @@ def crestart():
 
 @app.route("/controller/stream")
 def controller_stream():
-    return Response(handler.subscribe(), mimetype="text/event-stream")
+    return Response(stream.subscribe(), mimetype="text/event-stream")
 
 @app.route("/controller/start")
 def controller_start():
     global controller_inst
     global controller_gevent
-    if controller_inst is None:
+    if controller_inst is None or controller_inst.state=="off":
         controller_gevent = gevent.spawn(cstart)
         return "starting"
     return "already running"
@@ -297,7 +304,7 @@ def controller_start():
 @app.route("/controller/stop")
 def controller_stop():
     global controller_inst
-    if controller_inst is not None and controller_inst.loop:
+    if controller_inst is not None and controller_inst.state!="stopping":
         gevent.spawn(cstop)
         return "stopping"
     return "already stopped"
@@ -305,7 +312,7 @@ def controller_stop():
 @app.route("/controller/restart")
 def controller_restart():
     global controller_inst
-    if controller_inst is not None and controller_inst.loop:
+    if controller_inst is not None and controller_inst.state not in ["starting...", "stopping"]:
         gevent.spawn(crestart)
         return "restarting"
     return "not started"
@@ -318,11 +325,9 @@ def controller_status():
     else:
         return "off"
 
-
 @app.route('/shutdown')
 def shutdown():
     return ''
-
 
 @app.route('/json/servers')
 def json_servers():
@@ -379,15 +384,12 @@ def json_esxi_rack(rack_id):
 
 
 if __name__ == "__main__":
-    app.debug = True
-    wsgi_server = WSGIServer(("", 5000), app)
+    wsgi_server = WSGIServer(("", 5000), app, log=None)
     try:
         wsgi_server.serve_forever()
     except (KeyboardInterrupt, SystemExit):
         if controller_inst is not None:
-            print "Stopping running controller"
             cstop()
-        print "Closing the server"
 
 
 #if __name__ == '__main__':

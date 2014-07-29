@@ -1,14 +1,15 @@
 #-*- coding: utf-8 -*-
 
+import logging
+from datetime import datetime, timedelta
+from time import strptime, mktime
+from collections import defaultdict
+
 from contextlib import contextmanager
 
 from sqlalchemy import *
 from sqlalchemy.orm import sessionmaker, relationship, backref, aliased
 from sqlalchemy.ext.declarative import declarative_base
-
-from datetime import datetime, timedelta
-from time import strptime, mktime
-from collections import defaultdict
 
 
 Base = declarative_base()
@@ -136,11 +137,15 @@ class DAO:
     DB = 'sqlite:///../lab_monitor.sqlite'
 
     def __init__(self, engine=None):
-        # TODO on the piece of paper
+        self.log = logging.getLogger("lab_monitor.database.{0}".format(self.__class__.__name__))
+        self.log.info("Initializing")
+
         try:
             global DBENGINE
             DBENGINE
+            self.log.info("Global engine is available")
         except NameError:
+            self.log.info("Global engine not found, creating one")
             DBENGINE = create_engine(self.DB)
             Base.metadata.create_all(DBENGINE)
             Session.configure(bind=DBENGINE)
@@ -152,6 +157,7 @@ class ServersDAO(DAO):
 
     def server_create(self, addr, type_, rack, size, position):
         """Adds a new server to monitor"""
+        self.log.info("Creating a new server (%s)", addr)
         with session_scope() as session:
             session.add(Server(addr, type_, rack, size, position))
 
@@ -172,7 +178,7 @@ class ServersDAO(DAO):
                             .first()
 
                         row['power_supplies'] = [unit.health=='Ok' and unit.operational=='Ok' for unit in power_units]
-                        row['temperature'] = "%u°"%temperature.reading
+                        row['temperature'] = "{0}°".format(temperature.reading)
                     except AttributeError:
                         row['power_supplies'] = []
                         row['temperature'] = '?'
@@ -197,31 +203,47 @@ class ServersDAO(DAO):
             return q.count()
 
     def server_delete(self, id_=None, addr=None):
+        self.log.info("Deleting a server (%s)", id_ or addr)
         with session_scope() as session:
-            if id_ is not None:
-                serv = session.query(Server).get(id_)
-            elif addr is not None:
-                serv = session.query(Server).filter(Server.addr==addr)[0]
+            serv = None
+            try:
+                if id_ is not None:
+                    serv = session.query(Server).get(id_)
+                elif addr is not None:
+                    serv = session.query(Server).filter(Server.addr==addr)[0]
+
+                if serv is None:
+                    raise IndexError
+            except IndexError:
+                self.log.error("Server cannot be found")
+                return
 
             session.delete(serv)
 
     def server_update(self, id_=None, addr=None, update={}):
+        self.log.info("Updating a server (%s)", id_ or addr)
         with session_scope() as session:
-            if id_ is not None:
-                serv = session.query(Server).get(id_)
-            elif addr is not None:
-                serv = session.query(Server).filter(Server.addr==addr)[0]
+            serv = None
+            try:
+                if id_ is not None:
+                    serv = session.query(Server).get(id_)
+                elif addr is not None:
+                    serv = session.query(Server).filter(Server.addr==addr)[0]
+
+                if serv is None:
+                    raise IndexError
+            except IndexError:
+                self.log.error("Server cannot be found")
+                return
 
             for field, new in update.iteritems():
                 setattr(serv, field, new)
-
 
     def hypervisor_list(self, rack=None):
         with session_scope() as session:
             data = []
 
             serv = aliased(Server)
-
             q = session.query(Hypervisor).join(serv, Hypervisor.server).filter(serv.rack==rack if rack is not None else True)
             for hyperv in q:
                 row = {'addr':hyperv.addr, 'type':hyperv.type_, 'ilo_addr':hyperv.server.addr, 'rack':hyperv.server.rack}
@@ -230,25 +252,44 @@ class ServersDAO(DAO):
             return data
 
     def hypervisor_create(self, addr, type_, server_id):
+        self.log.info("Creating a hypervisor (%s)", addr)
         with session_scope() as session:
             session.add(Hypervisor(addr, type_, server_id))
 
     def hypervisor_update(self, id_=None, addr=None, update={}):
+        self.log.info("Updating a hypervisor (%s)", id_ or addr)
         with session_scope() as session:
-            if id_ is not None:
-                hyperv = session.query(Hypervisor).get(id_)
-            elif addr is not None:
-                hyperv = session.query(Hypervisor).filter(Hypervisor.addr==addr)[0]
+            hyperv = None
+            try:
+                if id_ is not None:
+                    hyperv = session.query(Hypervisor).get(id_)
+                elif addr is not None:
+                    hyperv = session.query(Hypervisor).filter(Hypervisor.addr==addr)[0]
+
+                if hyperv is None:
+                    raise IndexError
+            except IndexError:
+                self.log.error("Hypervisor cannot be found")
+                return
 
             for field, new in update.iteritems():
                 setattr(hyperv, field, new)
 
     def hypervisor_delete(self, id_=None, addr=None):
+        self.log.info("Deleting a hypervisor (%s)", id_ or addr)
         with session_scope() as session:
-            if id_ is not None:
-                hyperv = session.query(Hypervisor).get(id_)
-            elif addr is not None:
-                hyperv = session.query(Hypervisor).filter(Hypervisor.addr==addr)[0]
+            hyperv = None
+            try:
+                if id_ is not None:
+                    hyperv = session.query(Hypervisor).get(id_)
+                elif addr is not None:
+                    hyperv = session.query(Hypervisor).filter(Hypervisor.addr==addr)[0]
+
+                if hyperv is None:
+                    raise IndexError
+            except IndexError:
+                self.log.error("Hypervisor cannot be found")
+                return
 
             session.delete(hyperv)
 
@@ -263,22 +304,27 @@ class ServersDAO(DAO):
 class SensorsDAO(DAO):
 
     def store_server_status(self, server, status):
-        """Inserts power usage record to the database"""
+        """Inserts server status record to the database"""
+        self.log.info("Storing server status of %s", server)
         with session_scope() as session:
             session.add(ServerStatus(server, status))
 
     def store_power_usage(self, server, present, average, minimum, maximum):
         """Inserts power usage record to the database"""
+        self.log.info("Storing power usage of %s", server)
         with session_scope() as session:
             session.add(PowerUsage(server, present, average, minimum, maximum))
 
     def store_power_unit(self, server, power_supply, operational, health):
         """Inserts power unit record to the database"""
+        # this is executed in a loop for each power supply, hence 'debug' level
+        self.log.debug("Storing a power unit %s of %s", power_supply, server)
         with session_scope() as session:
             session.add(PowerUnits(server, power_supply, operational, health))
 
     def store_temperature(self, server, sensor, reading):
         """Inserts temperature sensor reading to the database"""
+        self.log.debug("Storing a temperature sensor %s of %s", sensor, server) # ditto
         with session_scope() as session:
             session.add(Temperature(server, sensor, reading))
 
@@ -295,10 +341,9 @@ class SensorsDAO(DAO):
             q = session.query(PowerUsage).filter(PowerUsage.server==server, between(PowerUsage.timestamp, start, end)).order_by(PowerUsage.timestamp)
             for row in q:
                 for col in data.keys():
-                    data[col].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), getattr(row, col)])
+                    data[col].append([self.strtojstime(row.timestamp), getattr(row, col)])
 
             return data
-            
 
     def get_power_units(self, server, start=None, end=None):
         """Loads power units data records from <start, end> range (last day by default)"""
@@ -312,10 +357,9 @@ class SensorsDAO(DAO):
 
             q = session.query(PowerUnits).filter(PowerUnits.server==server, between(PowerUnits.timestamp, start, end)).order_by(PowerUnits.timestamp)
             for row in q:
-                data[row.power_supply].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), int(row.operational=='Ok' and row.health=='Ok')])
+                data[row.power_supply].append([self.strtojstime(row.timestamp), int(row.operational=='Ok' and row.health=='Ok')])
 
             return data
-
 
     def get_temperature(self, server, start=None, end=None):
         """Loads temperature data records from <start, end> range (last day by default)"""
@@ -330,7 +374,7 @@ class SensorsDAO(DAO):
             q = session.query(Temperature).filter(Temperature.server==server, between(Temperature.timestamp, start, end)).order_by(Temperature.timestamp)
             for row in q:
                 # Can't we store time as Unix timestamps? This would make things simpler.
-                data[row.sensor].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), row.reading])
+                data[row.sensor].append([self.strtojstime(row.timestamp), row.reading])
 
             return data
 
@@ -346,7 +390,7 @@ class SensorsDAO(DAO):
 
             q = session.query(ServerStatus).filter(ServerStatus.server==server, between(ServerStatus.timestamp, start, end)).order_by(ServerStatus.timestamp)
             for row in q:
-                data['status'].append([1000*mktime(strptime(str(row.timestamp), "%Y-%m-%d %H:%M:%S.%f")), int(row.status)])
+                data['status'].append([self.strtojstime(row.timestamp), int(row.status)])
 
             return data
 
@@ -391,3 +435,7 @@ class SensorsDAO(DAO):
                 data['status'] = '?'
 
             return data
+
+    def strtojstime(self, timestamp):
+        """Converts a timestamp to the JavaScript epoch (milliseconds since Jan 1, 1970)"""
+        return 1000*mktime(strptime(str(timestamp), "%Y-%m-%d %H:%M:%S.%f"))

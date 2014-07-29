@@ -93,7 +93,6 @@ function rackDiagram(ctx, map, url_template, rack) {
                 .attr('coords', [x,y,x+w,y+h].join(','))
                 .attr('href', url_template.replace(/_/, server.addr))
                 .attr('title', server.addr)
-                .tooltip()
         )
 
         // server shape
@@ -321,17 +320,17 @@ function update_state(state)
     
     if(state=='off')
     {
-        $('#controller-stop, #controller-restart').prop('disabled', true);
-        $('#controller-start').prop('disabled', false);
+        $('#controller-stop, #controller-restart').parent().addClass('disabled');
+        $('#controller-start').parent().removeClass('disabled');
     }
     else if(state=='stopping' || state=='unreachable')
     {
-        $('#controller-start, #controller-stop, #controller-restart').prop('disabled', true);
+        $('#controller-start, #controller-stop, #controller-restart').parent().addClass('disabled');
     }
     else
     {
-        $('#controller-stop, #controller-restart').prop('disabled', false);
-        $('#controller-start').prop('disabled', true);
+        $('#controller-stop, #controller-restart').parent().removeClass('disabled');
+        $('#controller-start').parent().addClass('disabled');
     }
 }
 
@@ -343,19 +342,40 @@ $.get('/controller/status', function(d){
 stream = new EventSource('/controller/stream');
 stream.onupdated = [];
 stream.addEventListener('message', function(e) {
-    var msg = $.parseJSON(e.data);
-    if(msg.level=='STATECHANGE')
+    var msg = e.data;
+    update_state(msg);
+    
+    if(msg=='idle') // loading new data has just been finished
     {
-        update_state(msg.message);
-        
-        if(msg.message=='idle') // loading new data has just been finished
-        {
-            $.each(stream.onupdated, function(i,fx){
-                fx();
-            });
-        }
+        $.each(stream.onupdated, function(i,fx){
+            fx();
+        });
     }
 }, false);
 stream.addEventListener('error', function() {
     update_state('unreachable');
 }, false);
+
+$('#controller-start').on('click', function(e){
+    e.preventDefault()
+    if($(this).parent().hasClass('disabled'))
+        return;
+    
+    $.get('/controller/start');
+});
+
+$('#controller-stop').on('click', function(e){
+    e.preventDefault()
+    if($(this).parent().hasClass('disabled'))
+        return;
+    
+    $.get('/controller/stop');
+});
+
+$('#controller-restart').on('click', function(e){
+    e.preventDefault()
+    if($(this).parent().hasClass('disabled'))
+        return;
+    
+    $.get('/controller/restart');
+});
