@@ -1,10 +1,23 @@
 import paramiko
 import time
-import logging
+import logging, logging.handlers
 import database
 import smtplib
 from email.mime.text import MIMEText
 from smtplib import SMTPException
+
+baselog = logging.getLogger('lab_monitor')
+baselog.setLevel(logging.INFO)
+format = logging.Formatter("%(asctime)s %(levelname)-8s %(name)-36s %(message)s", "%H:%M:%S")
+ch = logging.StreamHandler()
+ch.setLevel(logging.WARNING)
+ch.setFormatter(format)
+baselog.addHandler(ch)
+
+rfh = logging.handlers.TimedRotatingFileHandler('../logs/lab_monitor', 'midnight')
+rfh.setLevel(logging.INFO)
+rfh.setFormatter(format)
+baselog.addHandler(rfh)
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
@@ -12,12 +25,7 @@ class ESXiHypervisor:
         self.addr = hostname
 
         self.log = logging.getLogger("lab_monitor.server.ESXiHypervisor")
-        if not getattr(self.log, 'handler_set', None):
-            self.log.setLevel(logging.INFO)
-            ch = logging.StreamHandler()
-            ch.setLevel(logging.INFO)
-            self.log.addHandler(ch)
-            self.log.handler_set = True
+        self.log.setLevel(logging.INFO)
         self.log.info("Connecting...")
 
         self.ssh = paramiko.SSHClient()
@@ -190,15 +198,11 @@ class Rack:
     def __init__(self, rackid):
         self.id = rackid
         self.log = logging.getLogger("lab_monitor.server.Rack")
-        if not getattr(self.log, 'handler_set', None):
-            self.log.setLevel(logging.INFO)
-            ch = logging.StreamHandler()
-            ch.setLevel(logging.INFO)
-            self.log.addHandler(ch)
-            self.log.handler_set = True
+        self.log.setLevel(logging.INFO)
         self.log.info("Initialazing rack with id=%s", self.id)
 
     def get_hypervisors_from_db(self):
+        print database.ServersDAO().server_list(self.id)
         return database.ServersDAO().hypervisor_list(self.id)
     
     def get_hypervisors_ready(self):
@@ -239,12 +243,7 @@ class Rack:
 class Laboratory:
     def __init__(self):
         self.log = logging.getLogger("lab_monitor.server.Laboratory")
-        if not getattr(self.log, 'handler_set', None):
-            self.log.setLevel(logging.INFO)
-            ch = logging.StreamHandler()
-            ch.setLevel(logging.INFO)
-            self.log.addHandler(ch)
-            self.log.handler_set = True
+        self.log.setLevel(logging.INFO)
         self.log.info("Initialazing lab")
 
     def get_racks(self):
@@ -275,19 +274,14 @@ class Laboratory:
 class EmailNotification():
     def __init__(self):
         self.log = logging.getLogger("lab_monitor.server.EmailNotification")
-        if not getattr(self.log, 'handler_set', None):
-            self.log.setLevel(logging.INFO)
-            ch = logging.StreamHandler()
-            ch.setLevel(logging.INFO)
-            self.log.addHandler(ch)
-            self.log.handler_set = True
+        self.log.setLevel(logging.INFO)
         self.log.info("Initialazing EmailNotificator")
 
         self.email_subject = "lab_monitor notification"
         self.email_receivers = ['receiverId@gmail.com']
         self.email_sender  =  'senderId@gmail.com'
-        self.gmail_smtp = "smtp.gmail.com"
-        self.gmail_smtp_port = 587
+        self.gmail_smtp = "pl-byd-srv01"
+        self.gmail_smtp_port = 25
         self.text_subtype = "plain"
         self.email_password = ""
 
