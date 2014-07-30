@@ -150,7 +150,9 @@ function drawChart(url, area){
 
     var series_data = [];
     $.getJSON(url, function(r){
+        var not_empty = false;
         $.each(r, function(name, data){
+            not_empty = not_empty || data.length;
             series_data.push({
                 'name': name,
                 'data': data,
@@ -158,7 +160,7 @@ function drawChart(url, area){
             });
         });
 
-        if(!series_data.length)
+        if(!not_empty)
         {
             $(area).html('<div class="alert alert-info">There is no data available! Please try again later.</div>');
             return;
