@@ -57,7 +57,9 @@ class SSHiLoSensors:
         self.log.info("Found %u temperature sensors and %u power supplies", len(self.sensors), len(self.power_supplies))
 
     def show(self, component, autoparse=True, original=False):
-        """Executes `show` command on the remote server and parses the output as a dictionary"""
+        """Executes `show component` command on the remote server.
+        If autoparse is set to True (by default it is), the output is be parsed as a dictionary.
+        If original is set to True, unparsed output is also returned as the 2nd element of a tuple"""
 
         cmd = "show {0}".format(component)
 

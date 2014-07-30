@@ -6,10 +6,6 @@ import gevent
 from sensors import SSHiLoSensors
 from database import *
 
-
-STATECHANGE = 9
-logging.addLevelName(STATECHANGE, 'STATECHANGE')
-
 class ILoController:
 
     def __init__(self):
@@ -19,10 +15,9 @@ class ILoController:
         self.servers_dao = None # you can assign it after instantiating the controller,
         self.sensors_dao = None # if you don't, connection will be automatically established later
 
-        self.loop = True
+        self.loop = False
 
         self.log = logging.getLogger('lab_monitor.controller.ILoController')
-        self.log.setLevel(STATECHANGE)
     
     def start(self):
         """Establishes all necessary connections and activates the main loop"""
@@ -61,11 +56,13 @@ class ILoController:
         self.main_loop()
 
     def update_state(self, state):
+        """Sets new controller state (starting, working, idle, stopping, off) and pushes it to a stream, if available"""
         self.state = state
         if self.state_stream is not None:
             self.state_stream.write(self.state)
 
     def store_data(self, server):
+        """Loads sensor and status data from given server (SSHiLoSensors instance) and stores them in the database"""
         self.log.info("Checking %s...", server.host)
 
         server_status = server.server_status()
@@ -85,6 +82,7 @@ class ILoController:
         self.log.info("Finished checking %s", server.host)
 
     def main_loop(self):
+        """Calls self.store_data for each server defined (each one in a new gevent.Greenlet) every minute"""
         self.loop = True
         try:
             while self.loop:
@@ -100,10 +98,10 @@ class ILoController:
                     dt = t-t0
                     wait = 60-dt
 
-                    self.update_state("idle")
 
                     # wait until next minute, unless it's time to finish
-                    if self.loop:
+                    if self.loop and wait>0:
+                        self.update_state("idle")
                         self.log.info("Waiting %u seconds...", wait)
                         # it should sleep, but also be able to wake up when stop is called
                         self.sleep = gevent.spawn(gevent.sleep, wait)

@@ -1,5 +1,3 @@
-#-*- coding: utf-8 -*-
-
 import logging
 from datetime import datetime, timedelta
 from time import strptime, mktime
@@ -137,6 +135,7 @@ class DAO:
     DB = 'sqlite:///../lab_monitor.sqlite'
 
     def __init__(self, engine=None):
+        """Initializes a Data Access Object, utilizing an existing engine if available (otherwise it creates one)"""
         self.log = logging.getLogger("lab_monitor.database.{0}".format(self.__class__.__name__))
         self.log.info("Initializing")
 
@@ -178,7 +177,7 @@ class ServersDAO(DAO):
                             .first()
 
                         row['power_supplies'] = [unit.health=='Ok' and unit.operational=='Ok' for unit in power_units]
-                        row['temperature'] = "{0}°".format(temperature.reading)
+                        row['temperature'] = u"{0}\u00b0".format(temperature.reading)
                     except AttributeError:
                         row['power_supplies'] = []
                         row['temperature'] = '?'
@@ -188,6 +187,7 @@ class ServersDAO(DAO):
             return data
 
     def server_has_hypervisor(self, id_, except_for=None):
+        """Checks if a given server has a corresponding ESXi hypervisor"""
         with session_scope() as session:
             q = session.query(Server).join(Server.hypervisor).filter(Server.id_==id_)
             if except_for is None:
@@ -196,13 +196,14 @@ class ServersDAO(DAO):
                 return q.count() and q[0].hypervisor.addr!=except_for
 
     def server_position(self, rack, position0, position1, except_for=None):
-        """Searches for servers on given position"""
+        """Searches for servers on given place (rack number, bottom position, top position). Optionally excludes a server with given address."""
         with session_scope() as session:
             q = session.query(Server) \
                 .filter(Server.rack==rack, position0<=(Server.position+Server.size-1), Server.position<=position1, Server.addr!=except_for if except_for is not None else True)
             return q.count()
 
     def server_delete(self, id_=None, addr=None):
+        """Deletes a server by ID or address"""
         self.log.info("Deleting a server (%s)", id_ or addr)
         with session_scope() as session:
             serv = None
@@ -221,6 +222,7 @@ class ServersDAO(DAO):
             session.delete(serv)
 
     def server_update(self, id_=None, addr=None, update={}):
+        """Updates a server by ID or address"""
         self.log.info("Updating a server (%s)", id_ or addr)
         with session_scope() as session:
             serv = None
@@ -240,6 +242,7 @@ class ServersDAO(DAO):
                 setattr(serv, field, new)
 
     def hypervisor_list(self, rack=None):
+        """Lists all defined ESXi hypervisors"""
         with session_scope() as session:
             data = []
 
@@ -252,11 +255,13 @@ class ServersDAO(DAO):
             return data
 
     def hypervisor_create(self, addr, type_, server_id):
+        """Creates an ESXi hypervisor"""
         self.log.info("Creating a hypervisor (%s)", addr)
         with session_scope() as session:
             session.add(Hypervisor(addr, type_, server_id))
 
     def hypervisor_update(self, id_=None, addr=None, update={}):
+        """Updates an ESXi hypervisor by ID or address"""
         self.log.info("Updating a hypervisor (%s)", id_ or addr)
         with session_scope() as session:
             hyperv = None
@@ -276,6 +281,7 @@ class ServersDAO(DAO):
                 setattr(hyperv, field, new)
 
     def hypervisor_delete(self, id_=None, addr=None):
+        """Deletes an ESXi hypervisor by ID or address"""
         self.log.info("Deleting a hypervisor (%s)", id_ or addr)
         with session_scope() as session:
             hyperv = None
@@ -420,12 +426,12 @@ class SensorsDAO(DAO):
                 data['power_units'] = '?'
 
             try:
-                data['temperature'] = "%u°"%temperature.reading
+                data['temperature'] = u"{0}\u00b0".format(temperature.reading)
             except:
                 data['temperature'] = '?'
 
             try:
-                data['power_usage'] = "%u W"%power_usage.present
+                data['power_usage'] = "{0} W".format(power_usage.present)
             except:
                 data['power_usage'] = '?'
 

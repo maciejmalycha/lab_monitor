@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import logging, logging.handlers
 
 from flask import *
