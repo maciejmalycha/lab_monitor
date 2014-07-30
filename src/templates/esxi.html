@@ -12,8 +12,8 @@
         Laboratory <span class="caret"></span>
         </a>
         <ul class="dropdown-menu" role="menu">
-            <li class="danger"><a href="#">Shutdown</a></li>
-            <li class="danger"><a href="#">Force shutdown</a></li>
+            <li><a href="#" id="lab-shutdown" data-trigger-confirm="Do you really want to &lt;strong&gt;shutdown&lt;/strong&gt; the whole laboratory?"><i class="fa fa-fw fa-power-off"></i> Shutdown</a></li>
+            <li><a href="#" id="lab-force-shutdown" data-trigger-confirm="Do you really want to &lt;strong&gt;force shutdown&lt;/strong&gt; the whole laboratory?"><i class="fa fa-fw fa-power-off"></i> Force shutdown</a></li>
         </ul>
     </li>
 </ul>
@@ -159,6 +159,19 @@ $(function() {
     };
 
     esxi_data();
+
+    $('#lab-shutdown').on('confirmed', function(e){
+        e.preventDefault();
+        $.post('/esxi/shutdown', function(){
+            esxi_data();
+        });
+    });
+    $('#lab-force-shutdown').on('confirmed', function(){
+        $.post('/esxi/force_shutdown', function(e){
+            e.preventDefault();
+            esxi_data();
+        });
+    });
 });
 </script>
 {% endblock %}

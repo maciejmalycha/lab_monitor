@@ -230,6 +230,18 @@ def esxi(rack_id=0):
     return render_template('esxi.html', servers=servers, rack_id=rack_id)
 
 # danger zone
+@app.route('/esxi/shutdown', methods=['POST'])
+def esxi_shutdown():
+    lab = Laboratory()
+    lab.shutdown(shutdown_timeout)
+    return ' '
+
+@app.route('/esxi/force_shutdown', methods=['POST'])
+def esxi_force_shutdown():
+    lab = Laboratory()
+    lab.force_shutdown(shutdown_timeout)
+    return ' '
+
 @app.route('/esxi/rack/<int:rack_id>/shutdown', methods=['POST'])
 def esxi_shutdown_rack(rack_id):
     rack_inst = Rack(rack_id)
@@ -326,10 +338,6 @@ def controller_status():
         return controller_inst.state
     else:
         return "off"
-
-@app.route('/shutdown')
-def shutdown():
-    return ''
 
 @app.route('/json/servers')
 def json_servers():
