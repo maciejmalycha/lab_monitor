@@ -343,6 +343,17 @@ class SensorsDAO(DAO):
         with session_scope() as session:
             session.add(Temperature(server, sensor, reading))
 
+    def get_time_bounds(self, table, server):
+        """Returns the earliest and the latest timestamp existing in a given table"""
+        with session_scope() as session:
+            q1 = session.query(table).order_by(table.timestamp)
+            if q1.count():
+                low = q1.first().timestamp
+                q2 = session.query(table).order_by(desc(table.timestamp))
+                high = q2.first().timestamp
+                return self.tojstime(low), self.tojstime(high)
+            return None
+
     def get_power_usage(self, server, start=None, end=None):
         """Loads power usage data records from <start, end> range (last day by default)"""
         if end is None:
@@ -356,7 +367,7 @@ class SensorsDAO(DAO):
             q = session.query(PowerUsage).filter(PowerUsage.server==server, between(PowerUsage.timestamp, start, end)).order_by(PowerUsage.timestamp)
             for row in q:
                 for col in data.keys():
-                    data[col].append([self.strtojstime(row.timestamp), getattr(row, col)])
+                    data[col].append([self.tojstime(row.timestamp), getattr(row, col)])
 
             return data
 
@@ -372,7 +383,7 @@ class SensorsDAO(DAO):
 
             q = session.query(PowerUnits).filter(PowerUnits.server==server, between(PowerUnits.timestamp, start, end)).order_by(PowerUnits.timestamp)
             for row in q:
-                data[row.power_supply].append([self.strtojstime(row.timestamp), int(row.operational=='Ok' and row.health=='Ok')])
+                data[row.power_supply].append([self.tojstime(row.timestamp), int(row.operational=='Ok' and row.health=='Ok')])
 
             return data
 
@@ -388,8 +399,7 @@ class SensorsDAO(DAO):
 
             q = session.query(Temperature).filter(Temperature.server==server, between(Temperature.timestamp, start, end)).order_by(Temperature.timestamp)
             for row in q:
-                # Can't we store time as Unix timestamps? This would make things simpler.
-                data[row.sensor].append([self.strtojstime(row.timestamp), row.reading])
+                data[row.sensor].append([self.tojstime(row.timestamp), row.reading])
 
             return data
 
@@ -405,7 +415,7 @@ class SensorsDAO(DAO):
 
             q = session.query(ServerStatus).filter(ServerStatus.server==server, between(ServerStatus.timestamp, start, end)).order_by(ServerStatus.timestamp)
             for row in q:
-                data['status'].append([self.strtojstime(row.timestamp), int(row.status)])
+                data['status'].append([self.tojstime(row.timestamp), int(row.status)])
 
             return data
 
@@ -451,6 +461,6 @@ class SensorsDAO(DAO):
 
             return data
 
-    def strtojstime(self, timestamp):
-        """Converts a timestamp to the JavaScript epoch (milliseconds since Jan 1, 1970)"""
-        return 1000*mktime(strptime(str(timestamp), "%Y-%m-%d %H:%M:%S.%f"))
+    def tojstime(self, timestamp):
+        """Converts a datetime object to the JavaScript epoch (milliseconds since Jan 1, 1970)"""
+        return 1000*mktime(timestamp.timetuple())

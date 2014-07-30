@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import logging, logging.handlers
+import datetime
 
 from flask import *
 import gevent
@@ -31,6 +32,7 @@ baselog.addHandler(rfh)
 
 # set up Flask and some globals
 app = Flask(__name__)
+#app.debug = True
 app.jinja_env.filters['unsafejson'] = lambda v: json.dumps(v) # encode to JSON and escape special chars
 controller_inst = None # ILoController instance
 controller_gevent = None # Greenlet that started the ILoController 
@@ -349,34 +351,49 @@ def json_general(server):
     data = sensors_dao.get_general(server)
     return jsonify(**data)
 
-@app.route('/json/server/<server>/temperature')
-def json_temperature(server):
+def rq_time_bounds():
     start = request.args.get('start', None)
     end = request.args.get('end', None)
-    data = sensors_dao.get_temperature(server, start, end)
-    return jsonify(**data)
+    if start is not None:
+        try:
+            start = datetime.fromtimestamp(int(start)/1000)
+        except:
+            start = None
+    if end is not None:
+        try:
+            end = datetime.fromtimestamp(int(end)/1000)
+        except:
+            end = None
 
+    return start, end
+
+@app.route('/json/server/<server>/temperature')
+def json_temperature(server):
+    start, end = rq_time_bounds()
+    data = sensors_dao.get_temperature(server, start, end)
+    bounds = sensors_dao.get_time_bounds(Temperature, server)
+    return jsonify(data=data, bounds=bounds)
 
 @app.route('/json/server/<server>/power_usage')
 def json_power_usage(server):
-    start = request.args.get('start', None)
-    end = request.args.get('end', None)
+    start, end = rq_time_bounds()
     data = sensors_dao.get_power_usage(server, start, end)
-    return jsonify(**data)
+    bounds = sensors_dao.get_time_bounds(PowerUsage, server)
+    return jsonify(data=data, bounds=bounds)
 
 @app.route('/json/server/<server>/power_units')
 def json_power_units(server):
-    start = request.args.get('start', None)
-    end = request.args.get('end', None)
+    start, end = rq_time_bounds()
     data = sensors_dao.get_power_units(server, start, end)
-    return jsonify(**data)
+    bounds = sensors_dao.get_time_bounds(PowerUnits, server)
+    return jsonify(data=data, bounds=bounds)
 
 @app.route('/json/server/<server>/status')
 def json_status(server):
-    start = request.args.get('start', None)
-    end = request.args.get('end', None)
+    start, end = rq_time_bounds()
     data = sensors_dao.get_status(server, start, end)
-    return jsonify(**data)
+    bounds = sensors_dao.get_time_bounds(ServerStatus, server)
+    return jsonify(data=data, bounds=bounds)
 
 @app.route('/json/esxi/rack/<rack_id>')
 def json_esxi_rack(rack_id):
