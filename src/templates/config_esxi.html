@@ -61,7 +61,7 @@
                 <label for="{{modal}}-server_id">iLo server:</label>
                 <select class="form-control" id="{{modal}}-server_id" name="server_id">
 {% for serv in servers %}
-                    <option value="{{ serv['id'] }}">{{ serv['addr'] }}</option>
+                    <option value="{{ serv['id'] }}" data-hyperv="{{ serv['hypervisor'] if serv['hypervisor'] else '' }}">{{ serv['addr'] }}</option>
 {% endfor %}
                 </select>
             </div>
@@ -88,11 +88,15 @@ $(function(){
     $('#create-hyperv-form, #update-hyperv-form').ajaxSubmit();
     $('.wait').hide();
 
+    $('#create-server_id option[data-hyperv!=""]').prop('disabled', true);
+
     $('[data-edit]').on('click', function(){
+        $('#update-server_id option').prop('disabled', false);
         data = $(this).data('edit');
         $.each(data, function(k,v){
             $('#update-'+k).val(v);
         });
+        $('#update-server_id option[data-hyperv!="'+data.addr+'"]').filter('[data-hyperv!=""]').prop('disabled', true);
         $('#update-hyperv-modal').modal('show');
     });
 })

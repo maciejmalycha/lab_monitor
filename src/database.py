@@ -37,7 +37,6 @@ class Server(Base):
     rack = Column(Integer)
     size = Column(Integer)
     position = Column(Integer)
-    hypervisor = relationship('Hypervisor', uselist=False, backref="hypervisors")
 
     def __init__(self, addr, type_, rack, size, position):
         self.addr = addr
@@ -54,7 +53,7 @@ class Hypervisor(Base):
     addr = Column(String(30))
     type_ = Column(String(30))
     server_id = Column(Integer, ForeignKey('servers.id_'))
-    server = relationship('Server', uselist=False, backref="servers")
+    server = relationship('Server', backref=backref('hypervisor', uselist=False), uselist=False)
 
     def __init__(self, addr, type_, server_id):
         self.addr = addr
@@ -165,9 +164,12 @@ class ServersDAO(DAO):
         with session_scope() as session:
             data = []
 
-            q = session.query(Server).filter(Server.rack==rack if rack is not None else True)
+            q = session.query(Server).outerjoin(Server.hypervisor).filter(Server.rack==rack if rack is not None else True)
             for serv in q:
-                row = {'id':serv.id_, 'addr':serv.addr, 'type':serv.type_, 'rack':serv.rack, 'size':serv.size, 'position':serv.position}
+                row = {'id':serv.id_, 'addr':serv.addr, 'type':serv.type_, 'rack':serv.rack, 'size':serv.size, 'position':serv.position, 'hypervisor':None}
+                if serv.hypervisor is not None:
+                    row['hypervisor'] = serv.hypervisor.addr
+
                 if with_health:
                     try:
                         power_units = session.query(PowerUnits).filter(PowerUnits.server==serv.addr).group_by(PowerUnits.power_supply).order_by(PowerUnits.power_supply)
@@ -203,7 +205,7 @@ class ServersDAO(DAO):
             return q.count()
 
     def server_delete(self, id_=None, addr=None):
-        """Deletes a server by ID or address"""
+        """Deletes a server by ID or address, with all readings and a corresponding ESXi hypervisor (if any)"""
         self.log.info("Deleting a server (%s)", id_ or addr)
         with session_scope() as session:
             serv = None
@@ -218,6 +220,13 @@ class ServersDAO(DAO):
             except IndexError:
                 self.log.error("Server cannot be found")
                 return
+
+            for table in [ServerStatus, PowerUsage, PowerUnits, Temperature]:
+                session.query(table).filter(table.server==serv.addr).delete()
+
+            hyperv = session.query(Server).join(Server.hypervisor).filter(Server.id_==serv.id_).first()
+            if hyperv is not None:
+                session.delete(hyperv)
 
             session.delete(serv)
 
