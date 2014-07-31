@@ -1,0 +1,16 @@
+---
+  thresholds:
+    rack: 0.5 # assume entire rack failure if something is wrong with 50% of servers
+    lab: 5 
+  temperature:
+    - sensor: Ambient Zone
+      high_warning: 20
+      low_warning: 15
+      critical: 25
+    - sensor: Power Supply Zone
+      high_warning: 45
+      low_warning: 40
+      critical: 50
+  unreachable_timeout: 2 # how many minutes old should a reading be to consider the server unreachable
+  shutdown:
+    timeout: 10
