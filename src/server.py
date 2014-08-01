@@ -2,10 +2,7 @@ import paramiko
 import time
 import logging, logging.handlers
 import database
-import smtplib
 import xmpp
-from email.mime.text import MIMEText
-from smtplib import SMTPException
 
 baselog = logging.getLogger('lab_monitor')
 baselog.setLevel(logging.INFO)
@@ -15,7 +12,7 @@ ch.setLevel(logging.WARNING)
 ch.setFormatter(format)
 baselog.addHandler(ch)
 
-rfh = logging.handlers.TimedRotatingFileHandler('lab_monitor/logs/lab_monitor', 'midnight')
+rfh = logging.handlers.TimedRotatingFileHandler('../lab_monitor/logs/lab_monitor', 'midnight')
 rfh.setLevel(logging.INFO)
 rfh.setFormatter(format)
 baselog.addHandler(rfh)
@@ -280,7 +277,7 @@ class HangoutNotification():
 
         self.receiver = 'receiver@gmail.com'
         self.sender  =  'sender@gmail.com'
-        self.google_password = ""
+        self.google_password = ''
 
         self.jid = xmpp.protocol.JID(self.sender)
         self.cl = xmpp.Client(self.jid.getDomain(),debug=[])
@@ -391,7 +388,7 @@ class HangoutNotification():
         else:
             return "wrong signal construction"
 
-    def send_notification(self, signal, pos1, pos2):
+    def send_notification(self, signal, pos1='', pos2=''):
         """Basing on signal we recieve, we must decide what kind of notfication we want to send"""
         self.cl.sendInitPresence() 
         self.cl.send(xmpp.protocol.Message(self.receiver, self.get_notification(signal, pos1, pos2), typ='chat'))
