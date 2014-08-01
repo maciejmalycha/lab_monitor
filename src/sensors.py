@@ -20,6 +20,10 @@ class ILoSSHClient(paramiko.SSHClient):
         raise paramiko.ssh_exception.SSHException("No authentication methods available")
 
 
+class HostUnreachableException(Exception):
+    pass
+
+
 class SSHiLoSensors:
 
     def __init__(self, host="pl-byd-esxi13-ilo", user="Administrator", password="ChangeMe"):
@@ -66,14 +70,19 @@ class SSHiLoSensors:
         self.log.debug("Executing `%s` on %s", cmd, self.host)
 
         success = False
-        while not success:
+        for _ in range(3):
             try:
                 stdin,stdout,stderr = self.ssh.exec_command(cmd)
                 success = True
+                break
             except paramiko.SSHException as e:
                 self.log.warning("Command failed (%s), reconnecting", e)
                 self.disconnect()
                 self.connect()
+
+        if not success:
+            self.log.error("Reconnection failed 3 times")
+            raise ServerUnreachableException
 
         output = stdout.read()
         self.log.debug("Command successful, received %u bytes of output", len(output))

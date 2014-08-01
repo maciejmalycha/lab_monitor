@@ -42,12 +42,16 @@ class ILoController:
 
             return conn
 
-        connect = [gevent.spawn(conn, serv) for serv in self.servers_dao.server_list()]
+        server_list = self.servers_dao.server_list()
+
+        connect = [gevent.spawn(conn, serv) for serv in server_list]
         gevent.joinall(connect)
         self.servers = [job.value for job in connect if job.successful()]
         
-        if self.servers:
-            self.log.info("Connected to %u servers", len(self.servers))
+        if len(self.servers)==len(server_list):
+            self.log.info("Connected to all %u servers", len(self.servers))
+        elif self.servers:
+            self.log.warning("Connected to %u out of %u servers", len(self.servers), len(server_list))
         else:
             self.log.warning("Nothing to monitor")
             self.update_state("off")
@@ -65,21 +69,27 @@ class ILoController:
         """Loads sensor and status data from given server (SSHiLoSensors instance) and stores them in the database"""
         self.log.info("Checking %s...", server.host)
 
-        server_status = server.server_status()
-        self.sensors_dao.store_server_status(server.host, server_status)
+        try:
+            server_status = server.server_status()
+            self.sensors_dao.store_server_status(server.host, server_status)
 
-        power_use = server.power_use()
-        self.sensors_dao.store_power_usage(server.host, power_use['present'], power_use['avg'], power_use['min'], power_use['max'])
+            power_use = server.power_use()
+            self.sensors_dao.store_power_usage(server.host, power_use['present'], power_use['avg'], power_use['min'], power_use['max'])
 
-        power_units = server.power_units()
-        for power_supply, state in power_units.iteritems():
-            self.sensors_dao.store_power_unit(server.host, power_supply, state['operational'], state['health'])
+            power_units = server.power_units()
+            for power_supply, state in power_units.iteritems():
+                self.sensors_dao.store_power_unit(server.host, power_supply, state['operational'], state['health'])
 
-        temp_sensors = server.temp_sensors()
-        for sensor, reading in temp_sensors.iteritems():
-            self.sensors_dao.store_temperature(server.host, sensor, reading)
+            temp_sensors = server.temp_sensors()
+            for sensor, reading in temp_sensors.iteritems():
+                self.sensors_dao.store_temperature(server.host, sensor, reading)
 
-        self.log.info("Finished checking %s", server.host)
+            self.log.info("Finished checking %s", server.host)
+
+        except HostUnreachableException:
+            # it has already been logged
+            self.sensors_dao.store_server_status(server.host, False)
+            return
 
     def main_loop(self):
         """Calls self.store_data for each server defined (each one in a new gevent.Greenlet) every minute"""
