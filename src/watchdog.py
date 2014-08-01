@@ -10,6 +10,20 @@ from database import *
 from server import *
 import notifications as n
 
+"""
+I found sending signals easier if they are classes. I made following assumptions:
+- all notification-related classes are located in notifications.py
+- a signal object is compatible with HangoutNotification (probably by implementing __str__ method)
+- Server?Signal (where ? is problem summary, like TemperatureRaise or PartialPowerLoss) constructor
+  takes server dictionary as returned by ServersDAO.server_list as the 1st argument
+  and specific data (eg. sensor reading) as other arguments
+- Server?Signal has a class constant PARENT equal to 'Rack?Signal' (string)
+- Rack?Signal constructor takes related Server?Signals in *args
+- Rack?Signal has a class constant PARENT equal to 'Lab?Signal' (string)
+- Lab?Signal constructor takes related Rack?Signals in *args
+- signals that require shutting something down derive from a common base class
+  (it's okay to derive from multiple classes in Python)
+"""
 
 class Watchdog:
     def __init__(self, config='../watchdog.yaml'):
