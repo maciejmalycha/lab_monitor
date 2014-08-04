@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+
+{% block sidebar %}
+<ul class="nav nav-pills nav-stacked">
+
+{% for i in range(7) %}
+    <li{{ ' class="active"'|safe if rack_id==i else '' }}><a href="{{ url_for('esxi', rack_id=i) }}">Rack #{{ i+1 }}</a></li>
+{% endfor %}
+
+    <li class="dropdown">
+        <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+        Laboratory <span class="caret"></span>
+        </a>
+        <ul class="dropdown-menu" role="menu">
+            <li><a href="#" id="lab-shutdown" data-trigger-confirm="Do you really want to &lt;strong&gt;shutdown&lt;/strong&gt; the whole laboratory?"><i class="fa fa-fw fa-power-off"></i> Shutdown</a></li>
+            <li><a href="#" id="lab-force-shutdown" data-trigger-confirm="Do you really want to &lt;strong&gt;force shutdown&lt;/strong&gt; the whole laboratory?"><i class="fa fa-fw fa-power-off"></i> Force shutdown</a></li>
+        </ul>
+    </li>
+</ul>
+
+{% endblock %}
+
+
+{% block main %}
+
+<div id="esxi-data">
+<h3><i class="fa fa-spinner fa-spin"></i> loading...</h3>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="//code.highcharts.com/stock/highstock.js"></script>
+<script>
+$(function() {
+    esxi_data = function() {
+        $.getJSON('{{ url_for('json_esxi_rack', rack_id=rack_id) }}', function(d){
+            $('#esxi-data').empty();
+
+            if($.isEmptyObject(d))
+            {
+                $('#esxi-data').html('<div class="alert alert-info">There are no ESXi servers in this rack.</div>');
+                return;
+            }
+
+            $.each(d, function(name, hv){
+                var div = $('<div>');
+                var h3 = $('<h3>').html(name);
+                var table = $('<table class="table table-striped"><thead><tr><th>VM ID</th><th>Status</th><th>VMware Tools</th><th class="actions">Actions</th></tr></thead></table>');
+                var tbody = $('<tbody>');
+
+                $.each(hv, function(i,vm){
+                    if(vm.status)
+                    {
+                        var buttons = $('<span>').append(
+                            $('<button>')
+                                .addClass('btn btn-xs btn-danger')
+                                .prop('disabled', !vm.tools)
+                                .html('<i class="fa fa-power-off"></i>')
+                                .attr('data-trigger-confirm', 'Do you really want to <strong>shutdown</strong> this virtual machine?')
+                                .data('loading-text', 'Shutting down...')
+                                .on('confirmed', function(){
+                                    $(this).button('loading');
+                                    $.post('/esxi/server/'+name+'/'+vm.id+'/shutdown', function(){
+                                        esxi_data();
+                                    });
+                                })
+                        ).append(' ').append(
+                            $('<button>')
+                                .addClass('btn btn-xs btn-danger')
+                                .html('Force <i class="fa fa-power-off"></i>')
+                                .attr('data-trigger-confirm', 'Do you really want to <strong>force shutdown</strong> of this virtual machine?')
+                                .data('loading-text', 'Forcing shutdown...')
+                                .on('confirmed', function(){
+                                    $(this).button('loading');
+                                    $.post('/esxi/server/'+name+'/'+vm.id+'/force_shutdown', function(){
+                                        esxi_data();
+                                    });
+                                })
+                        );
+                    }
+                    else
+                        var buttons = '';
+
+                    var tr = $('<tr>')
+                        .append($('<td>').html(vm.id))
+                        .append($('<td>').html(vm.status?'<span class="text-primary"><i class="fa fa-fw fa-bolt"></i> Running</span>':'<span class="text-muted"><i class="fa fa-fw fa-power-off"></i> Powered off</span>'))
+                        .append($('<td>').html(vm.tools?'<span class="text-success"><i class="fa fa-fw fa-check"></i> Installed</span>':'<span class="text-danger"><i class="fa fa-fw fa-times"></i> Not installed</span>'))
+                        .append($('<td>').addClass('actions').append(buttons));
+
+                    tbody.append(tr);
+                });
+
+                var shutdown_buttons = $('<span>').append(' ').append(
+                            $('<button>')
+                                .addClass('btn btn-sm btn-danger')
+                                .html('<i class="fa fa-power-off"></i>')
+                                .attr('data-trigger-confirm', 'Do you really want to <strong>shutdown</strong> the whole server?')
+                                .data('loading-text', 'Shutting down...')
+                                .on('confirmed', function(){
+                                    $(this).button('loading');
+                                    $.post('/esxi/server/'+name+'/shutdown', function(){
+                                        esxi_data();
+                                    });
+                                })
+                        ).append(' ').append(
+                            $('<button>')
+                                .addClass('btn btn-sm btn-danger')
+                                .html('Force <i class="fa fa-power-off"></i>')
+                                .attr('data-trigger-confirm', 'Do you really want to <strong>force shutdown</strong> of the whole server?')
+                                .data('loading-text', 'Forcing shutdown...')
+                                .on('confirmed', function(){
+                                    $(this).button('loading');
+                                    $.post('/esxi/server/'+name+'/force_shutdown', function(){
+                                        esxi_data();
+                                    });
+                                })
+                        );
+                
+                h3.append(shutdown_buttons);
+                div.append(h3);
+                table.append(tbody);
+                div.append(table);
+                div.append('<hr>');
+                $('#esxi-data').append(div);
+            });
+
+            var shutdown_buttons = $('<div>').append('<div><strong>This rack:</strong></div>').append(
+                    $('<button>')
+                        .addClass('btn btn-lg btn-danger')
+                        .html('Shutdown')
+                        .attr('data-trigger-confirm', 'Do you really want to <strong>shutdown</strong> the whole rack?')
+                        .data('loading-text', 'Shutting down...')
+                        .on('confirmed', function(){
+                            $(this).button('loading');
+                            $.post('/esxi/rack/{{rack_id}}/shutdown', function(){
+                                esxi_data();
+                            });
+                        })
+                ).append(' ').append(
+                    $('<button>')
+                        .addClass('btn btn-lg btn-danger')
+                        .html('Force shutdown')
+                        .attr('data-trigger-confirm', 'Do you really want to <strong>force shutdown</strong> of the whole rack?')
+                        .data('loading-text', 'Forcing shutdown...')
+                        .on('confirmed', function(){
+                            $(this).button('loading');
+                            $.post('/esxi/rack/{{rack_id}}/force_shutdown', function(){
+                                esxi_data();
+                            });
+                        })
+                );
+
+            $('#esxi-data').append(shutdown_buttons);
+
+        }).fail(function(){
+            $('#esxi-data').html('<div class="alert alert-danger">Failed to load data! Please try again later.</div>');
+        });
+    };
+
+    esxi_data();
+
+    $('#lab-shutdown').on('confirmed', function(e){
+        e.preventDefault();
+        $.post('/esxi/shutdown', function(){
+            esxi_data();
+        });
+    });
+    $('#lab-force-shutdown').on('confirmed', function(){
+        $.post('/esxi/force_shutdown', function(e){
+            e.preventDefault();
+            esxi_data();
+        });
+    });
+});
+</script>
+{% endblock %}
