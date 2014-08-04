@@ -4,7 +4,7 @@
 <ul class="nav nav-pills nav-stacked">
 
 {% for endpoint,title in [('status_temperature', 'Temperature'), ('status_power_usage', 'Power usage'), ('status_status', 'Status'), ('status_power_units', 'Power units')] %}
-    <li{{ ' class="active"'|safe if endpoint==request.url_rule.endpoint else '' }}><a href="{{ url_for(endpoint, server=server) }}">{{ title }}</a></li>
+    <li{{ ' class="active"'|safe if endpoint==request.url_rule.endpoint else '' }}><a href="{{ url_for(endpoint, server=server) }}"><span id="{{ endpoint }}-badge" class="badge pull-right"></span>{{ title }}</a></li>
 {% endfor %}
 </ul>
 
@@ -17,6 +17,7 @@
 <h3><i class="fa fa-spinner fa-spin"></i> loading...</h3>
 
 </div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -26,8 +27,17 @@ $(function() {
     var chart = function() {
         drawChart('{{ url_for(data_src, server=server) }}', '#graph');
     }
+    var badges = function() {
+        $.get('{{ url_for('json_general', server=server) }}', function(d){
+            $.each(d, function(param, value){
+                $('#status_'+param+'-badge').html(value);
+            });
+        });
+    }
     chart();
     stream.onupdated.push(chart);
+    badges();
+    stream.onupdated.push(badges);
 });
 </script>
 {% endblock %}
