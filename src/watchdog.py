@@ -86,8 +86,8 @@ class ServerWatchdog:
 
         # assume everything's OK
         self.status = True
-        self.temperature = dict(s['sensor'], True for s in self.wd.config['temperature'])
-        self.
+        self.temperature = dict((s['sensor'], True) for s in self.wd.config['temperature'])
+        self.power_units = {'Power Supply 1': True, 'Power Supply 2': True}
 
         self.problems = []
 
@@ -152,12 +152,12 @@ class ServerWatchdog:
             readings = temperature[sensor]
             self.log.info("Read %u temperature records for %s", len(readings), sensor)
             for timestamp, value in readings:
-                if value>sensor['critical']:
+                if value>s['critical']:
                     self.add_problem('TemperatureShutdown', value, sensor=sensor)
-                elif value>sensor['warning'] and self.temperature[sensor]:
+                elif value>s['warning'] and self.temperature[sensor]:
                     self.add_problem('TemperatureRaise', value, sensor=sensor)
                     self.temperature[sensor] = False
-                elif value<sensor['warning'] and not self.temperature[sensor]:
+                elif value<s['warning'] and not self.temperature[sensor]:
                     self.add_problem('TemperatureDrop', value, sensor=sensor)
                     self.temperature[sensor] = True
 
