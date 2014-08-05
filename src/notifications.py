@@ -58,47 +58,30 @@ class ServerPowerRestoredSignal(Signal):
 
 class ServerTemperatureRaiseSignal(Signal):
     PARENT = 'RackTemperatureRaiseSignal'
-    sensor = 'unknown sensor'
-    def __init__(self, server, value):
+    def __init__(self, server, sensor, value):
         self.server = server
+        self.sensor = sensor
         self.value = value
     def __str__(self):
         return "Temperature at {0} in server {1} reached {2} C".format(self.sensor, self.server['addr'], self.value)
 
 class ServerTemperatureDropSignal(Signal):
     PARENT = 'RackTemperatureDropSignal'
-    sensor = 'unknown sensor'
-    def __init__(self, server, value):
+    def __init__(self, server, sensor, value):
         self.server = server
+        self.sensor = sensor
         self.value = value
     def __str__(self):
         return "Temperature at {0} in server {1} dropped to {2} C".format(self.sensor, self.server['addr'], self.value)
 
 class ServerTemperatureShutdownSignal(ServerShutdownSignal):
     PARENT = 'RackTemperatureShutdownSignal'
-    sensor = 'unknown sensor'
-    def __init__(self, server, value):
+    def __init__(self, server, sensor, value):
         self.server = server
+        self.sensor = sensor
         self.value = value
     def __str__(self):
         return "Temperature at {0} in server {1} reached {2} C. Shutting down.".format(self.sensor, self.server['addr'], self.value)
-
-class ServerTemperatureSignalsFactory:
-    """In order to store temperature signals as different classes (necessary for grouping)
-    this class provides creation of new temperature signal class for given sensor"""
-
-    classes = {}
-    @classmethod
-    def create(cls, base, sensor):
-        try:
-            return cls.classes[base, sensor]
-        except KeyError:
-            class NewSignal(base):
-                pass
-            NewSignal.__name__ = "{0}[{1}]".format(base.__name__, sensor)
-            NewSignal.sensor = sensor
-            cls.classes[base, sensor] = NewSignal
-            return NewSignal
 
 class ServerShutdownInitSignal(Signal):
     def __init__(self, server_list, server_name):
@@ -118,7 +101,7 @@ class RackGridPowerLossSignal(RackSignal):
     def __str__(self):
         return "Power loss in rack {0}. Suspected power grid failure".format(self.rack_id+1)
 
-class RackUPSPowerRestoredSignal(RackSignal):
+class RackPowerRestoredSignal(RackSignal):
     def __str__(self):
         return "Power restored in rack {0}".format(self.rack_id+1)
 
