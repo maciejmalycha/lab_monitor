@@ -7,37 +7,43 @@ import time
 
 import yaml
 
+from minuteworker import MinuteWorker
 from database import *
-# from server import *
 import notifications as n
 
-class Watchdog:
+class Watchdog(MinuteWorker):
+    use_gevent = False
+    logger_name = 'lab_monitor.watchdog'
+    interval = 10
+
     def __init__(self, config='../watchdog.yaml'):
-        self.log = logging.getLogger("lab_monitor.watchdog")
-        self.log.info("Initializing")
+        super(Watchdog, self).__init__()
 
         with open(config) as cf:
             self.log.info("Reading configuration")
             self.config = yaml.load(cf)
 
-        # self.notifier = HangoutNotification()
+        self.notifier = n.HangoutNotification(**self.config['xmpp'])
         self.sensors_dao = SensorsDAO()
         self.servers_dao = ServersDAO()
 
-        self.problems = []
+        self.problems = ProblemDict()
         self.log.info("Creating rack watchdogs")
         self.racks = [RackWatchdog(self, i) for i in range(7)]
 
+    def tasks(self):
+        return [(self.check, ())]
+
     def check(self):
-        self.problems = []
+        self.problems.clear()
         for rack in self.racks:
             self.log.info("Checking rack #%u", rack.rack_id)
             rack.check()
             self.problems.extend(rack.problems)
 
-        merge_problems(self.problems, self.config['thresholds']['lab'], self.log)
+        self.problems.merge(self.config['thresholds']['lab'], self.log)
 
-        for problem in self.problems:
+        for problem in list(self.problems):
             if isinstance(problem, n.LabShutdownSignal):
                 self.log.info("Need to shutdown the whole lab", problem.rack_id)
                 pass # shut it down
@@ -49,31 +55,31 @@ class Watchdog:
                 #hyperv = ESXiHypervisor(problem.server.hypervisor)
                 #hyperv.shutdown()
 
-            self.log.info("Sending '%s'", problem)
-            # self.notifier.send_notification(problem)
+            #self.log.warning("%s", problem)
+            self.notifier.send_notification(problem)
 
 
-class RackWatchdog:
+class RackWatchdog(object):
     def __init__(self, watchdog, rack_id):
         self.wd = watchdog
         self.rack_id = rack_id
         self.log = logging.getLogger('lab_monitor.watchdog')
 
-        self.problems = []
+        self.problems = ProblemDict()
 
         self.servers = [ServerWatchdog(self.wd, serv) \
                   for serv in self.wd.servers_dao.server_list(rack=self.rack_id)]
 
     def check(self):
-        self.problems = []
+        self.problems.clear()
         for server in self.servers:
             server.check()
             self.problems.extend(server.problems)
 
-        merge_problems(self.problems, self.wd.config['thresholds']['rack']*len(self.servers), self.log)
+        self.problems.merge(self.wd.config['thresholds']['rack']*len(self.servers), self.log)
 
 
-class ServerWatchdog:
+class ServerWatchdog(object):
     def __init__(self, watchdog, server, last_timestamp=time.time()):
         self.wd = watchdog
         self.log = logging.getLogger('lab_monitor.watchdog')
@@ -89,25 +95,25 @@ class ServerWatchdog:
         self.temperature = dict((s['sensor'], True) for s in self.wd.config['temperature'])
         self.power_units = {'Power Supply 1': True, 'Power Supply 2': True}
 
-        self.problems = []
+        self.problems = ProblemDict()
 
-    def add_problem(self, signal, *args, **kwargs):
+    def add_problem(self, signal, *args):
         self.log.info('Creating %s signal for %s', signal, self.server['addr'])
+
         signal_class = getattr(n, "Server{0}Signal".format(signal))
-
-        if signal.startswith('Temperature'):
-            signal_class = n.ServerTemperatureSignalsFactory.create(signal_class, kwargs['sensor'])
-
         signal_args = (self.server,)+args
         signal_obj = signal_class(*signal_args)
-        self.log.info('%s', signal_obj)
-        self.problems.append(signal_obj)
+
+        self.problems[signal_class].append(signal_obj)
 
     def set_timestamp(self, timestamp):
-        self.last_timestamp = max(timestamp/1000, self.last_timestamp)
+        # filtering by date/time uses SQL `between` (non-strict
+        # inequalities) so next time the last record will be
+        # also selected from the database; hence +1
+        self.last_timestamp = max((timestamp+1)/1000, self.last_timestamp)
 
     def check(self):
-        self.problems = []
+        self.problems.clear()
         t = datetime.fromtimestamp(self.last_timestamp)
 
         self.log.info("Checking %s, last timestamp: %s", self.server['addr'], t)
@@ -120,13 +126,18 @@ class ServerWatchdog:
         self.log.info("Read %u status records", len(statuses))
         for timestamp, status in statuses:
             if not status and self.status:
-                self.add_problem('CommunicationLost', last_reading) # TODO KYPBA
+                last_reading = 'N/A' if self.status is True else datetime.fromtimestamp(self.status)
+                # self.status is initially set to True, so if it *is* True, it means
+                # that this is the first reading and we don't know the date/time of last reading
+                self.add_problem('CommunicationLost', last_reading)
                 self.status = False
             elif status and not self.status:
                 self.add_problem('CommunicationRestored')
                 self.status = True
-            # else do nothing, because it either means that everything is OK
-            # or that communication is lost, but the user had already been notified
+            elif status and self.status:
+                self.status = timestamp/1000
+            # else do nothing, because it means that communication
+            # is lost, but the user had already been notified
             self.set_timestamp(timestamp)
 
         self.log.info("Read %u power units records", len(power_units))
@@ -152,35 +163,46 @@ class ServerWatchdog:
             readings = temperature[sensor]
             self.log.info("Read %u temperature records for %s", len(readings), sensor)
             for timestamp, value in readings:
-                if value>s['critical']:
-                    self.add_problem('TemperatureShutdown', value, sensor=sensor)
-                elif value>s['warning'] and self.temperature[sensor]:
-                    self.add_problem('TemperatureRaise', value, sensor=sensor)
+                if value >= s['critical']:
+                    self.add_problem('TemperatureShutdown', sensor, value)
+                elif value >= s['warning'] and self.temperature[sensor]:
+                    self.add_problem('TemperatureRaise', sensor, value)
                     self.temperature[sensor] = False
-                elif value<s['warning'] and not self.temperature[sensor]:
-                    self.add_problem('TemperatureDrop', value, sensor=sensor)
+                elif value < s['warning'] and not self.temperature[sensor]:
+                    self.add_problem('TemperatureDrop', sensor, value)
                     self.temperature[sensor] = True
 
                 self.set_timestamp(timestamp)
 
-def merge_problems(problems, threshold, log):
-    """Converts threshold problems of the same type
-    to one parent problem (server -> rack, rack -> lab).
-    Modifies the original problems list."""
-    categories = defaultdict(list)
-    merged = []
-    for problem in problems:
-        categories[problem.__class__].append(problem)
 
-    for ctg, listed in categories.iteritems():
-        if len(listed)>=threshold and hasattr(ctg, 'PARENT'):
-            log.info("Merging %u %ss into one %s", len(listed), ctg.__name__, ctg.PARENT)
-            merged.append(getattr(n, ctg.PARENT)(listed))
-        else:
-            merged.extend(listed)
+class ProblemDict(defaultdict):
+    def __init__(self):
+        super(ProblemDict, self).__init__(list)
 
-    problems[:] = merged
+    def extend(self, other):
+        for key, val in other.iteritems():
+            self[key].extend(val)
 
+    def __iter__(self):
+        for key, val in self.iteritems():
+            for item in val:
+                yield item
 
-logging.basicConfig(level=logging.INFO)
-w = Watchdog()
+    def merge(self, threshold, log):
+        """Converts threshold problems of the same type
+        to one parent problem (server -> rack, rack -> lab).
+        Modifies the original problems dict."""
+
+        for cl, listed in self.iteritems():
+            if len(listed)>=threshold and hasattr(cl, 'PARENT'):
+                log.info("Merging %u %ss into one %s", len(listed), cl.__name__, cl.PARENT)
+
+                mclass = getattr(n, cl.PARENT)
+                merged = mclass(listed)
+                self[mclass].append(merged)
+                del self[cl]
+
+if __name__ == '__main__':
+    logging.basicConfig()
+    w = Watchdog('../watchdog.topsecret.yaml')
+    w.start()
