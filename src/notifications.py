@@ -1,4 +1,4 @@
-
+import xmpp
 
 class Signal:
     pass
@@ -155,3 +155,21 @@ class LabTemperatureDropSignal(Signal):
 class LabTemperatureShutdownSignal(Signal):
     def __init__(self, temp_val):
         pass
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+class HangoutNotification():
+    def __init__(self, **config):
+        self.recipient = config['recipient']
+        self.sender = config['sender']
+        self.google_password = config['password']
+
+        self.jid = xmpp.protocol.JID(self.sender)
+        self.cl = xmpp.Client(self.jid.getDomain(),debug=[])
+        self.cl.connect()
+        self.cl.auth(self.jid.getNode(), self.google_password)
+
+    def send_notification(self, signal):
+        """Basing on signal we recieve, we must decide what kind of notfication we want to send"""
+        self.cl.sendInitPresence() 
+        self.cl.send(xmpp.protocol.Message(self.recipient, str(signal), typ='chat'))

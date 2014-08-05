@@ -11,3 +11,7 @@
       critical: 50
   shutdown:
     timeout: 10
+  xmpp:
+    recipient: recipient@gmail.com
+    sender: sender@gmail.com
+    password: xxxxxxxxxxxxxxxx # use a google app password (https://security.google.com/settings/security/apppasswords)

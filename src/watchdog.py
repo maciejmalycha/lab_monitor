@@ -7,26 +7,31 @@ import time
 
 import yaml
 
+from minuteworker import MinuteWorker
 from database import *
-# from server import *
 import notifications as n
 
-class Watchdog:
+class Watchdog(MinuteWorker):
+    use_gevent = False
+    logger_name = 'lab_monitor.watchdog'
+
     def __init__(self, config='../watchdog.yaml'):
-        self.log = logging.getLogger("lab_monitor.watchdog")
-        self.log.info("Initializing")
+        super(Watchdog, self).__init__()
 
         with open(config) as cf:
             self.log.info("Reading configuration")
             self.config = yaml.load(cf)
 
-        # self.notifier = HangoutNotification()
+        self.notifier = n.HangoutNotification(**self.config['xmpp'])
         self.sensors_dao = SensorsDAO()
         self.servers_dao = ServersDAO()
 
         self.problems = []
         self.log.info("Creating rack watchdogs")
         self.racks = [RackWatchdog(self, i) for i in range(7)]
+
+    def tasks(self):
+        return [(self.check, ())]
 
     def check(self):
         self.problems = []
@@ -50,10 +55,10 @@ class Watchdog:
                 #hyperv.shutdown()
 
             self.log.info("Sending '%s'", problem)
-            # self.notifier.send_notification(problem)
+            self.notifier.send_notification(problem)
 
 
-class RackWatchdog:
+class RackWatchdog(object):
     def __init__(self, watchdog, rack_id):
         self.wd = watchdog
         self.rack_id = rack_id
@@ -73,7 +78,7 @@ class RackWatchdog:
         merge_problems(self.problems, self.wd.config['thresholds']['rack']*len(self.servers), self.log)
 
 
-class ServerWatchdog:
+class ServerWatchdog(object):
     def __init__(self, watchdog, server, last_timestamp=time.time()):
         self.wd = watchdog
         self.log = logging.getLogger('lab_monitor.watchdog')
@@ -104,7 +109,10 @@ class ServerWatchdog:
         self.problems.append(signal_obj)
 
     def set_timestamp(self, timestamp):
-        self.last_timestamp = max(timestamp/1000, self.last_timestamp)
+        # filtering by date/time uses SQL `between` (non-strict inequalities)
+        # so next time the last record will be also selected from the database
+        # hence +1
+        self.last_timestamp = max((timestamp+1)/1000, self.last_timestamp)
 
     def check(self):
         self.problems = []
@@ -120,13 +128,18 @@ class ServerWatchdog:
         self.log.info("Read %u status records", len(statuses))
         for timestamp, status in statuses:
             if not status and self.status:
-                self.add_problem('CommunicationLost', last_reading) # TODO KYPBA
+                last_reading = 'N/A' if self.status is True else datetime.fromtimestamp(self.status)
+                # self.status is initially set to True, so if it *is* True, it means
+                # that this is the first reading and we don't know the date/time of last reading
+                self.add_problem('CommunicationLost', last_reading)
                 self.status = False
             elif status and not self.status:
                 self.add_problem('CommunicationRestored')
                 self.status = True
-            # else do nothing, because it either means that everything is OK
-            # or that communication is lost, but the user had already been notified
+            elif status and self.status:
+                self.status = timestamp/1000
+            # else do nothing, because it means that communication
+            # is lost, but the user had already been notified
             self.set_timestamp(timestamp)
 
         self.log.info("Read %u power units records", len(power_units))
@@ -182,5 +195,7 @@ def merge_problems(problems, threshold, log):
     problems[:] = merged
 
 
-logging.basicConfig(level=logging.INFO)
-w = Watchdog()
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+    w = Watchdog()
+    w.start()
