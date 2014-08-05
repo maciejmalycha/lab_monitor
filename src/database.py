@@ -346,7 +346,7 @@ class SensorsDAO(DAO):
     def get_time_bounds(self, table, server):
         """Returns the earliest and the latest timestamp existing in a given table"""
         with session_scope() as session:
-            q1 = session.query(table).order_by(table.timestamp)
+            q1 = session.query(table).filter(table.server==server).order_by(table.timestamp)
             if q1.count():
                 low = q1.first().timestamp
                 q2 = session.query(table).order_by(desc(table.timestamp))
