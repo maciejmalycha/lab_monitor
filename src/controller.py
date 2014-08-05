@@ -1,23 +1,15 @@
-import logging
-import time
 
-import gevent
-
+from minuteworker import MinuteWorker
 from sensors import SSHiLoSensors
 from database import *
 
-class ILoController:
+class ILoController(MinuteWorker):
+    logger_name = 'lab_monitor.controller.ILoController'
 
     def __init__(self):
-        self.state = "starting..."
-        self.state_stream = None
-        self.sleep = None
+        super(ILoController, self).__init__()
         self.servers_dao = None # you can assign it after instantiating the controller,
         self.sensors_dao = None # if you don't, connection will be automatically established later
-
-        self.loop = False
-
-        self.log = logging.getLogger('lab_monitor.controller.ILoController')
     
     def start(self):
         """Establishes all necessary connections and activates the main loop"""
@@ -33,20 +25,15 @@ class ILoController:
 
         self.log.info("Database opened")
 
-        def conn(serv):
+        self.servers = []
+        server_list = self.servers_dao.server_list()
+        for serv in server_list:
             try:
                 conn = SSHiLoSensors(serv['addr'])
             except Exception as e:
                 self.log.error("Cannot connect to %s: %s", serv['addr'], e)
-                raise
-
-            return conn
-
-        server_list = self.servers_dao.server_list()
-
-        connect = [gevent.spawn(conn, serv) for serv in server_list]
-        gevent.joinall(connect)
-        self.servers = [job.value for job in connect if job.successful()]
+                continue
+            self.servers.append(conn)
         
         if len(self.servers)==len(server_list):
             self.log.info("Connected to all %u servers", len(self.servers))
@@ -58,12 +45,6 @@ class ILoController:
             return
 
         self.main_loop()
-
-    def update_state(self, state):
-        """Sets new controller state (starting, working, idle, stopping, off) and pushes it to a stream, if available"""
-        self.state = state
-        if self.state_stream is not None:
-            self.state_stream.write(self.state)
 
     def store_data(self, server):
         """Loads sensor and status data from given server (SSHiLoSensors instance) and stores them in the database"""
@@ -91,50 +72,5 @@ class ILoController:
             self.sensors_dao.store_server_status(server.host, False)
             return
 
-    def main_loop(self):
-        """Calls self.store_data for each server defined (each one in a new gevent.Greenlet) every minute"""
-        self.loop = True
-        try:
-            while self.loop:
-                try:
-                    t0 = time.time()
-
-                    self.update_state("working")
-
-                    tasks = [gevent.spawn(self.store_data, server) for server in self.servers]
-                    gevent.joinall(tasks)
-
-                    t = time.time()
-                    dt = t-t0
-                    wait = 60-dt
-
-
-                    # wait until next minute, unless it's time to finish
-                    if self.loop and wait>0:
-                        self.update_state("idle")
-                        self.log.info("Waiting %u seconds...", wait)
-                        # it should sleep, but also be able to wake up when stop is called
-                        self.sleep = gevent.spawn(gevent.sleep, wait)
-                        self.sleep.join()
-
-                except Exception as e:
-                    self.log.exception("Exception happened: %s", e)
-
-            self.update_state("off")
-            self.log.info("Exiting")
-            return True
-                
-        except KeyboardInterrupt:
-            self.stop()
-
-    def stop(self):
-        """Stops the main loop. If the controller is working, waits until the end of current iteration. If it's idle, breaks out of sleep immediately"""
-
-        if self.loop:
-            self.log.info("Stop called")
-            self.loop = False
-            self.update_state("stopping")
-            if self.sleep is not None:
-                self.sleep.kill()
-        else:
-            self.log.info("Already outside main loop")
+    def tasks(self):
+        return [(self.store_data, (server,)) for server in self.servers]
