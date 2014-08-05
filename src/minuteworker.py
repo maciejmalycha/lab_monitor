@@ -8,6 +8,7 @@ class MinuteWorker(object):
 
     use_gevent = True # should the tasks be performed concurrently as gevent.Greenlets?
     logger_name = 'lab_monitor.minuteworker.MinuteWorker'
+    interval = 60
 
     def __init__(self):
         self.state = "starting..."
@@ -52,7 +53,7 @@ class MinuteWorker(object):
 
                     t = time.time()
                     dt = t-t0
-                    wait = 60-dt
+                    wait = self.interval-dt
 
                     # wait until next minute, unless it's time to finish
                     if self.loop and wait>0:
