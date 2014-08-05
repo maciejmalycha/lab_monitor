@@ -165,12 +165,12 @@ class ServerWatchdog(object):
             readings = temperature[sensor]
             self.log.info("Read %u temperature records for %s", len(readings), sensor)
             for timestamp, value in readings:
-                if value>s['critical']:
+                if value >= s['critical']:
                     self.add_problem('TemperatureShutdown', value, sensor=sensor)
-                elif value>s['warning'] and self.temperature[sensor]:
+                elif value >= s['warning'] and self.temperature[sensor]:
                     self.add_problem('TemperatureRaise', value, sensor=sensor)
                     self.temperature[sensor] = False
-                elif value<s['warning'] and not self.temperature[sensor]:
+                elif value < s['warning'] and not self.temperature[sensor]:
                     self.add_problem('TemperatureDrop', value, sensor=sensor)
                     self.temperature[sensor] = True
 
