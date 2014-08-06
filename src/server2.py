@@ -44,15 +44,36 @@ class Server(object):
         })
 
     def create_temp_alarms(self, sensors):
-        self.alarms['temperature'] = {}
+        # the two following master alarms aren't meant to be sent
+        # (hence 0 priority), but they are used to catch temperature raise
+        # in the entire rack or laboratory (they're being watched by
+        # a master alarm in the rack)
+        self.alarms['temperature'] = alarms.MasterAlarm(
+            'temperature', 0,
+            "Temperature of {server} raised", "Temperature of {server} dropped",
+            server=self.addr
+        )
+        self.alarms['shutdown_temperature'] = alarms.MasterAlarm(
+            'temperature', 0,
+            "Temperature of {server} raised. Shutting down.",
+            "Temperature of {server} dropped. Aborting shutdown.",
+            server=self.addr
+        )
+
+        # don't get confused, ['temperature'] and ['temperature_shutdown']
+        # are master alarms, but in ['temp'] there's an alarm for each sensor
+        self.alarms['temp'] = {}
         for sensor, (warning, shutdown) in sensors.iteritems():
-            self.alarms['temperature'][sensor] = [
-                alarms.TemperatureAlarm(1, warning, server=self.addr, sensor=sensor),
-                alarms.TemperatureAlarm(2, shutdown,
-                    "Temperature of {server} at {sensor} reached {reading} C. Shutting down.",
-                    "Temperature of {server} at {sensor} dropped to {reading} C. Aborting shutdown.",
-                    server=self.addr, sensor=sensor),
-            ]
+            warn_alarm = alarms.TemperatureAlarm(1, warning, server=self.addr, sensor=sensor)
+            shut_alarm = alarms.TemperatureAlarm(2, shutdown,
+                "Temperature of {server} at {sensor} reached {reading} C. Shutting down.",
+                "Temperature of {server} at {sensor} dropped to {reading} C. Aborting shutdown.",
+                server=self.addr, sensor=sensor)
+
+            self.alarms['temperature'].add_watched(warn_alarm)
+            self.alarms['shutdown_temperature'].add_watched(shut_alarm)
+
+            self.alarms['temp'][sensor] = [warn_alarm, shut_alarm]
 
     def check(self):
         try:
@@ -78,8 +99,10 @@ class Server(object):
             temp_sensors = self.sensors.temp_sensors()
             for sensor, reading in temp_sensors.iteritems():
                 self.sensors_dao.store_temperature(self.addr, sensor, reading)
-                for alarm in self.alarms['temperature'].get(sensor, []):
+                for alarm in self.alarms['temp'].get(sensor, []):
                     alarm.update(reading)
+            self.alarms['temperature'].update()
+            self.alarms['shutdown_temperature'].update()
 
             self.log.info("Finished checking %s", self.addr)
 
@@ -111,6 +134,18 @@ class Rack(object):
             'grid_power', 2,
             "Power loss in rack {rack} detected. Suspected power grid failure",
             "Grid power in rack {rack} restored",
+            rack=self.rack_id+1
+        )
+        self.master_alarms['temperature'] = alarms.MasterAlarm(
+            'temperature', 3,
+            "Temperature in rack {rack} raised",
+            "Temperature in rack {rack} dropped",
+            rack=self.rack_id+1
+        )
+        self.master_alarms['shutdown_temperature'] = alarms.MasterAlarm(
+            'temperature', 4,
+            "Temperature in rack {rack} raised. Shutting down.",
+            "Temperature in rack {rack} dropped. Aborting shutdown.",
             rack=self.rack_id+1
         )
 
@@ -147,6 +182,16 @@ class Laboratory(object):
             'grid_power', 3,
             "Power loss in laboratory detected. Suspected power grid failure",
             "Grid power in laboratory restored"
+        )
+        self.master_alarms['temperature'] = alarms.MasterAlarm(
+            'temperature', 4,
+            "Temperature in laboratory raised",
+            "Temperature in laboratory dropped",
+        )
+        self.master_alarms['shutdown_temperature'] = alarms.MasterAlarm(
+            'temperature', 5,
+            "Temperature in laboratory raised. Shutting down.",
+            "Temperature in laboratory dropped. Aborting shutdown.",
         )
 
         for key, master in self.master_alarms.iteritems():
