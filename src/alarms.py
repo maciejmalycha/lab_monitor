@@ -98,6 +98,18 @@ class MasterAlarm(Alarm):
 
         self.active = active
 
+    def check_send(self):
+        """Decides whether the alarm has been updated recently
+        and should be sent. If so, marks the alarm as sent."""
+        if self.sent:
+            return False
+        else:
+            self.sent = True
+            for alarm in self.watched:
+                alarm.sent = True
+            
+            return True
+
 class Sender(object):
     """A trivial sender for testing purposes"""
     def send(self, msg):
