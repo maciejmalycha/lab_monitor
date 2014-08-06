@@ -1,38 +1,41 @@
 from collections import defaultdict
+import string
 
 class Alarm(object):
     """An alarm is used to keep track of changing parameters in the system.
     Each one belongs to a specific group of related alarms, has certain priority
-    and a text message (with str.format-compatible placeholders) for active
-    and inactive state."""
+    and a text message (with str.format-compatible keyword placeholders)
+    for active and inactive state."""
 
     instances = defaultdict(list)
 
-    def __init__(self, group, priority, on_message, off_message):
+    def __init__(self, group, priority, on_message, off_message, **kwargs):
         self.priority = priority
         self.group = group
         self.on_message = on_message
         self.off_message = off_message
 
         self.active = False
-        self.params = ()
+        self.kwargs = defaultdict(lambda: 'N/A')
+        self.kwargs.update(kwargs)
         self.sent = True
 
         Alarm.instances[self.group].append(self)
 
-    def update(self, active, *args):
+    def update(self, active, **kwargs):
         """Sets the alarm state to active or inactive;
-        optional *args will be formatted into the message"""
-        if self.active != active or self.params != args:
-            self.active = active
-            self.params = args
+        optional **kwargs will be formatted into the message"""
+        if self.active != active:
             self.sent = False
 
-    def activate(self, *args):
-        self.update(True, *args)
+        self.active = active
+        self.kwargs.update(kwargs)
 
-    def deactivate(self, *args):
-        self.update(False, *args)
+    def activate(self, **kwargs):
+        self.update(True, **kwargs)
+
+    def deactivate(self, **kwargs):
+        self.update(False, **kwargs)
 
     def check_send(self):
         """Decides whether the alarm has been updated recently
@@ -50,7 +53,26 @@ class Alarm(object):
     def __str__(self):
         """Returns a formatted on/off message."""
         msg = self.on_message if self.active else self.off_message
-        return msg.format(*self.params)
+        return string.Formatter().vformat(msg, (), self.kwargs)
+
+
+class TemperatureAlarm(Alarm):
+    """A special alarm for temperature readings"""
+
+    def __init__(self, priority, threshold,
+                 on_message="Temperature of {server} at {sensor} reached {reading} C",
+                 off_message="Temperature of {server} at {sensor} dropped to {reading} C",
+                 **kwargs):
+        super(TemperatureAlarm, self).__init__(
+            'temperature', priority, on_message, off_message, **kwargs
+        )
+        self.reading = None
+        self.threshold = threshold
+
+    def update(self, reading):
+        self.reading = reading
+        super(TemperatureAlarm, self) \
+            .update(self.reading>=self.threshold,reading=self.reading)
 
 
 class Sender(object):
