@@ -74,6 +74,29 @@ class TemperatureAlarm(Alarm):
         super(TemperatureAlarm, self) \
             .update(self.reading>=self.threshold,reading=self.reading)
 
+class MasterAlarm(Alarm):
+    """An alarm that is considered on if certain number of watched alarms is on"""
+
+    def __init__(self, *args, **kwargs):
+        super(MasterAlarm, self).__init__(*args, **kwargs)
+        self.watched = []
+        self.threshold = 1
+
+    def add_watched(self, alarm):
+        self.watched.append(alarm)
+
+    def set_threshold(self, threshold):
+        self.threshold = threshold
+
+    def update(self):
+        """Set the active state by checking if enough watched alarms are on.
+        Must be called manually after (potential) update of watched alarms"""
+        active = len(filter(None, self.watched)) >= self.threshold
+        if self.active != active:
+            self.sent = False
+
+        self.active = active
+
 class Sender(object):
     """A trivial sender for testing purposes"""
     def send(self, msg):
