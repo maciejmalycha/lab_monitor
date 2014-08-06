@@ -7,7 +7,7 @@ class Alarm(object):
     and a text message (with str.format-compatible keyword placeholders)
     for active and inactive state."""
 
-    instances = defaultdict(list)
+    instances = defaultdict(lambda: defaultdict(list))
 
     def __init__(self, group, priority, on_message, off_message, **kwargs):
         self.priority = priority
@@ -20,7 +20,7 @@ class Alarm(object):
         self.kwargs.update(kwargs)
         self.sent = True
 
-        Alarm.instances[self.group].append(self)
+        Alarm.instances[self.group][self.priority].append(self)
 
     def update(self, active, **kwargs):
         """Sets the alarm state to active or inactive;
@@ -74,7 +74,6 @@ class TemperatureAlarm(Alarm):
         super(TemperatureAlarm, self) \
             .update(self.reading>=self.threshold,reading=self.reading)
 
-
 class Sender(object):
     """A trivial sender for testing purposes"""
     def send(self, msg):
@@ -93,11 +92,13 @@ class Notifications(object):
     def notify(self):
         """Sends active alarm of the highest priority from each group.
         This method must be called manually after updating all alarms."""
-        for group, alarms in Alarm.instances.iteritems():
-            for alarm in sorted(alarms, key=lambda x: -x.priority):
-                if alarm.check_send():
-                    for sender in self.senders:
-                        sender.send(str(alarm))
+        for group, priorities in Alarm.instances.iteritems():
+            sent = False
+            for priority in sorted(priorities, reverse=True):
+                for alarm in priorities[priority]:
+                    if alarm.check_send():
+                        for sender in self.senders:
+                            sender.send(str(alarm))
+                        sent = True
+                if sent:
                     break
-
-
