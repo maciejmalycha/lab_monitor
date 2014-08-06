@@ -86,7 +86,8 @@ class MasterAlarm(Alarm):
         self.watched.append(alarm)
 
     def set_threshold(self, threshold):
-        self.threshold = threshold
+        if threshold > 0:
+            self.threshold = threshold
 
     def update(self):
         """Set the active state by checking if enough watched alarms are on.
