@@ -5,6 +5,7 @@ import datetime
 import paramiko
 
 import database
+import sensors
 from minuteworker import MinuteWorker
 
 class ESXiHypervisor:
@@ -216,6 +217,11 @@ class Rack:
     def add_server(self, server):
         self.servers.append(server)
 
+    def prepare_servers(self):
+        serv_list = database.ServersDAO().server_list(self.id)
+        for serv in serv_list:
+            self.add_server(Server(ESXiHypervisor(serv['hypervisor']), sensors.SSHiLoSensors(serv['addr']), database.SensorsDAO()))
+
     def status(self):
         if not self.servers:
             self.log.error("Not found")
@@ -255,6 +261,19 @@ class Laboratory:
 
     def add_rack(self, rack):
         self.racks.append(rack)
+
+    def prepare_racks(self):
+        for rackid in range(0,6):
+            if database.ServersDAO().server_list(rackid):
+                self.add_rack(Rack(rackid))
+
+    def init_racks(self):
+        for rack in self.racks:
+            rack.prepare_servers()
+
+    def init_structure(self):
+        self.prepare_racks()
+        self.init_racks()
 
     def status(self):
         for rack in self.racks:
