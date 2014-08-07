@@ -300,10 +300,17 @@ class Laboratory:
     def register_alarm(self, alarm):
         self.alarms.append(alarm)
 
+    def iter_servers(self):
+        for rack in self.racks:
+            for server in rack.servers:
+                yield server
+
+    def servers(self):
+        return list(self.iter_servers())
+
     def prepare_racks(self):
-        for rackid in range(0,6):
-            if database.ServersDAO().server_list(rackid):
-                self.add_rack(Rack(rackid, self.servers_dao, self.sensors_dao))
+        for rackid in range(7):
+            self.add_rack(Rack(rackid, self.servers_dao, self.sensors_dao))
 
     def init_racks(self):
         for rack in self.racks:
