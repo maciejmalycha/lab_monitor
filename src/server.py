@@ -5,7 +5,7 @@ import datetime
 import paramiko
 
 import database
-from sensors import HostUnreachableException
+import sensors as sensors_mod
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
@@ -212,14 +212,14 @@ class Server:
             self.power_units = self.sensors.power_units()
             self.temperature = self.sensors.temp_sensors()
 
-        except HostUnreachableException:
+        except sensors_mod.HostUnreachableException:
             # it has already been logged
             self.server_status = False
 
         self.last_reading = datetime.datetime.now()
 
     def store_status(self):
-        self.sensors_dao.store_status(self.addr, self.server_status)
+        self.sensors_dao.store_server_status(self.addr, self.server_status)
 
         self.sensors_dao.store_power_usage(self.addr, **self.power_usage)
 
@@ -231,20 +231,29 @@ class Server:
 
 
 class Rack:
-    def __init__(self, rackid):
-        self.id = rackid
+    def __init__(self, rack_id, servers_dao, sensors_dao):
+        self.id = rack_id
         self.servers = []
         self.log = logging.getLogger("lab_monitor.server.Rack")
         self.log.setLevel(logging.INFO)
         self.log.info("Initialazing rack with id=%s", self.id)
+        self.servers_dao = servers_dao
+        self.sensors_dao = sensors_dao
 
     def add_server(self, server):
         self.servers.append(server)
 
+    def register_alarm(self, alarm):
+        self.alarms.append(alarm)
+
     def prepare_servers(self):
-        serv_list = database.ServersDAO().server_list(self.id)
+        serv_list = self.servers_dao.server_list(self.id)
         for serv in serv_list:
-            self.add_server(Server(ESXiHypervisor(serv['hypervisor']), sensors.SSHiLoSensors(serv['addr']), database.SensorsDAO()))
+            hyperv = ESXiHypervisor(serv['hypervisor']) if serv['hypervisor'] else None
+            sensors = sensors_mod.SSHiLoSensors(serv['addr'])
+            server = Server(serv['addr'], hyperv, sensors, self.sensors_dao)
+            # create alarms
+            self.add_server(server)
 
     def status(self):
         if not self.servers:
@@ -277,19 +286,24 @@ class Rack:
 
 
 class Laboratory:
-    def __init__(self):
+    def __init__(self, servers_dao, sensors_dao):
         self.racks = []
         self.log = logging.getLogger("lab_monitor.server.Laboratory")
         self.log.setLevel(logging.INFO)
         self.log.info("Initialazing lab")
+        self.servers_dao = servers_dao
+        self.sensors_dao = sensors_dao
 
     def add_rack(self, rack):
         self.racks.append(rack)
 
+    def register_alarm(self, alarm):
+        self.alarms.append(alarm)
+
     def prepare_racks(self):
         for rackid in range(0,6):
             if database.ServersDAO().server_list(rackid):
-                self.add_rack(Rack(rackid))
+                self.add_rack(Rack(rackid, self.servers_dao, self.sensors_dao))
 
     def init_racks(self):
         for rack in self.racks:
