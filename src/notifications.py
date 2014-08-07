@@ -1,81 +1,158 @@
-import server
+import xmpp
 
-class ServerCommunicationRestoredSignal():
-	def __init__(self, server_list, server_name):
-		pass
+class Signal:
+    pass
 
-class ServerCommunicationLostSignal():
-	def __init__(self, server_list, server_name, datetime):
-		pass
+class RackSignal(Signal):
+    def __init__(self, signals):
+        self.signals = signals
+        self.rack_id = self.signals[0].server['rack']
 
-class ServerPowerRestoredSignal():
-	def __init__(self, server_list, server_name):
-		pass
+class ServerShutdownSignal(Signal):
+    """A base class for server signals that require shutdown"""
+    pass
 
-class ServerPowerPartialLossSignal():
-	def __init__(self, server_list, server_name):
-		pass
+class RackShutdownSignal(RackSignal):
+    """A base class for rack signals that require shutdown"""
+    pass
 
-class ServerTemperatureRaiseSignal():
-	def __init__(self, server_list, server_name, temp_value):
-		pass
+class LabShutdownSignal(Signal):
+    """A base class for lab signals that require shutdown"""
+    pass
 
-class ServerTemperatureDropSignal():
-	def __init__(self, server_list, server_name, temp_value):
-		pass
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-class ServerTemperatureShutdownSignal():
-	def __init__(self, server_list, server_name, temp_value):
-		pass
+class ServerCommunicationRestoredSignal(Signal):
+    def __init__(self, server):
+        self.server = server
+    def __str__(self):
+        return "Communication with server {0} restored".format(self.server['addr'])
 
-class ServerShutdownInitSignal():
-	def __init__(self, server_list, server_name):
-		pass
+class ServerCommunicationLostSignal(Signal):
+    def __init__(self, server, last_reading):
+        self.server = server
+        self.last_reading = last_reading
+    def __str__(self):
+        return "Communication with server {0} lost. Last reading from {1}".format(self.server['addr'], self.last_reading)
 
-class ServerShutdownCompletedSignal():
-	def __init__(self, server_list, server_name):
-		pass
+class ServerUPSPowerLossSignal(Signal):
+    PARENT = 'RackUPSPowerLossSignal'
+    def __init__(self, server):
+        self.server = server
+    def __str__(self):
+        return "Power loss in UPS supply in server {0}".format(self.server['addr'])
 
-class RackPowerPartialLossUPSSignal():
-	def __init__(self, rack):
-		pass
+class ServerGridPowerLossSignal(Signal):
+    PARENT = 'RackGridPowerLossSignal'
+    def __init__(self, server):
+        self.server = server
+    def __str__(self):
+        return "Power loss in power grid supply in server {0}".format(self.server['addr'])
 
-class RackPowerPartialLossGridSignal():
-	def __init__(self, rack):
-		pass
+class ServerPowerRestoredSignal(Signal):
+    PARENT = 'RackPowerRestoredSignal'
+    def __init__(self, server):
+        self.server = server
+    def __str__(self):
+        return "Power loss in power grid supply in server {0}".format(self.server['addr'])
 
-class RackPowerRestoredSignal():
-	def __init__(self, rack):
-		pass
+class ServerTemperatureRaiseSignal(Signal):
+    PARENT = 'RackTemperatureRaiseSignal'
+    def __init__(self, server, sensor, value):
+        self.server = server
+        self.sensor = sensor
+        self.value = value
+    def __str__(self):
+        return "Temperature at {0} in server {1} reached {2} C".format(self.sensor, self.server['addr'], self.value)
 
-class RackTemperatureRaiseSignal():
-	def __init__(self, rack, temp_value):
-		pass
+class ServerTemperatureDropSignal(Signal):
+    PARENT = 'RackTemperatureDropSignal'
+    def __init__(self, server, sensor, value):
+        self.server = server
+        self.sensor = sensor
+        self.value = value
+    def __str__(self):
+        return "Temperature at {0} in server {1} dropped to {2} C".format(self.sensor, self.server['addr'], self.value)
 
-class RackTemperatureDropSignal():
-	def __init__(self, rack, temp_value):
-		pass
+class ServerTemperatureShutdownSignal(ServerShutdownSignal):
+    PARENT = 'RackTemperatureShutdownSignal'
+    def __init__(self, server, sensor, value):
+        self.server = server
+        self.sensor = sensor
+        self.value = value
+    def __str__(self):
+        return "Temperature at {0} in server {1} reached {2} C. Shutting down.".format(self.sensor, self.server['addr'], self.value)
 
-class RackTemperatureShutdownSignal():
-	def __init__(self, rack, temp_value):
-		pass
+class ServerShutdownInitSignal(Signal):
+    def __init__(self, server_list, server_name):
+        pass
 
-class LabPowerPartialLossSignal():
-	def __init__(self, timeout):
-		pass
+class ServerShutdownCompletedSignal(Signal):
+    def __init__(self, server_list, server_name):
+        pass
 
-class LabPowerRestoredSignal():
-	def __init__(self):
-		pass
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
-class LabTemperatureRaiseSignal():
-	def __init__(self, temp_value):
-		pass
+class RackUPSPowerLossSignal(RackSignal):
+    def __str__(self):
+        return "Power loss in rack {0}. Suspected UPS failure".format(self.rack_id+1) # internally, rack numbers are zero-based
 
-class LabTemperatureDropSignal():
-	def __init__(self, temp_value):
-		pass
+class RackGridPowerLossSignal(RackSignal):
+    def __str__(self):
+        return "Power loss in rack {0}. Suspected power grid failure".format(self.rack_id+1)
 
-class LabTemperatureShutdownSignal():
-	def __init__(self, temp_val):
-		pass
+class RackPowerRestoredSignal(RackSignal):
+    def __str__(self):
+        return "Power restored in rack {0}".format(self.rack_id+1)
+
+class RackTemperatureRaiseSignal(RackSignal):
+    def __str__(self):
+        return "Temperature in rack {0} raised".format(self.rack_id+1)
+
+class RackTemperatureDropSignal(RackSignal):
+    def __str__(self):
+        return "Temperature in rack {0} dropped".format(self.rack_id+1)
+
+class RackTemperatureShutdownSignal(RackShutdownSignal):
+    def __str__(self):
+        return "Temperature in rack {0} reached too much. Shutting down".format(self.rack_id+1)
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+class LabPowerPartialLossSignal(Signal):
+    def __init__(self, timeout):
+        pass
+
+class LabPowerRestoredSignal(Signal):
+    def __init__(self):
+        pass
+
+class LabTemperatureRaiseSignal(Signal):
+    def __init__(self, temp_value):
+        pass
+
+class LabTemperatureDropSignal(Signal):
+    def __init__(self, temp_value):
+        pass
+
+class LabTemperatureShutdownSignal(Signal):
+    def __init__(self, temp_val):
+        pass
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+class HangoutNotification():
+    def __init__(self, **config):
+        self.recipient = config['recipient']
+        self.sender = config['sender']
+        self.google_password = config['password']
+
+        self.jid = xmpp.protocol.JID(self.sender)
+        self.cl = xmpp.Client(self.jid.getDomain(),debug=[])
+        self.cl.connect()
+        self.cl.auth(self.jid.getNode(), self.google_password)
+
+    def send_notification(self, signal):
+        """Basing on signal we recieve, we must decide what kind of notfication we want to send"""
+        self.cl.sendInitPresence() 
+        self.cl.send(xmpp.protocol.Message(self.recipient, str(signal), typ='chat'))

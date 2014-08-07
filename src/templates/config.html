@@ -3,7 +3,7 @@
 {% block sidebar %}
 <ul class="nav nav-pills nav-stacked">
 
-{% for endpoint,title in [('config_servers', 'Servers')] %}
+{% for endpoint,title in [('config_servers', 'Servers'), ('config_hypervisors', 'ESXi hypervisors')] %}
     <li{{ ' class="active"'|safe if endpoint==request.url_rule.endpoint else '' }}><a href="{{ url_for(endpoint) }}">{{ title }}</a></li>
 {% endfor %}
 </ul>

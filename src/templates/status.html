@@ -17,6 +17,7 @@
 <h3><i class="fa fa-spinner fa-spin"></i> loading...</h3>
 
 </div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -32,7 +33,6 @@ $(function() {
                 $('#status_'+param+'-badge').html(value);
             });
         });
-        console.log('updating badges');
     }
     chart();
     stream.onupdated.push(chart);

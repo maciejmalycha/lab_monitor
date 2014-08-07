@@ -21,7 +21,7 @@
             <td class="actions">
                 <a class="btn btn-xs btn-primary" href="{{ url_for('status', server=serv['addr']) }}" title="Monitor"><i class="fa fa-bar-chart-o"></i></a>
                 <button class="btn btn-xs btn-info" title="Edit" data-edit="{{serv|unsafejson}}"><i class="fa fa-pencil"></i></button>
-                <a href="{{ url_for('config_servers_delete', server=serv['addr']) }}" class="btn btn-xs btn-danger" title="Delete" data-confirm="Do you really want to delete this server?"><i class="fa fa-times"></i></a>
+                <a href="{{ url_for('config_servers_delete', server=serv['addr']) }}" class="btn btn-xs btn-danger" title="Delete" data-confirm="Do you really want to delete this server, along with past status data{{ ' and ESXi hypervisor at <code>{0}</code>'.format(serv.hypervisor) if serv.hypervisor else '' }}?"><i class="fa fa-times"></i></a>
             </td>
         </tr>
 {% endfor %}
@@ -94,7 +94,7 @@
 {% block scripts %}
 <script>
 $(function(){
-    $('.actions a').tooltip();
+    $('.actions a, .actions button').tooltip();
     $('#create-server-form, #update-server-form').ajaxSubmit();
     $('.wait').hide();
 

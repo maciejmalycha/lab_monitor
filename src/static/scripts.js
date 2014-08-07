@@ -27,7 +27,6 @@ $.fn.ajaxSubmit = function() {
     });
 }
 
-
 function rackDiagram(ctx, map, url_template, rack) {
     var racks = 7;
     var units = 42;
@@ -126,7 +125,7 @@ function rackDiagram(ctx, map, url_template, rack) {
         ctx.textBaseline = 'bottom';
         // wait! the text may be too big for current canvas size
         var text_size = ctx.measureText(server.addr);
-        if(text_size.width<rack_width)
+        if(text_size.width<rack_width && h>25)
         {
             ctx.fillText(server.addr, x+rack_width/2, y+h-2);
         }
@@ -135,13 +134,13 @@ function rackDiagram(ctx, map, url_template, rack) {
         ctx.font = '20px "Source Sans Pro"';
         ctx.textAlign = 'center';
         ctx.fillStyle = '#111';
-        ctx.textBaseline = 'hanging';
-        ctx.fillText(server.temperature, x+rack_width/2, y);
+        ctx.textBaseline = 'top';
+        ctx.fillText(server.temperature, x+rack_width/2, y-4);
 
     });
 }
 
-function drawChart(url, area){
+function drawChart(url, area, params){
 
     Highcharts.setOptions({
         global : {
@@ -150,8 +149,14 @@ function drawChart(url, area){
     });
 
     var series_data = [];
-    $.getJSON(url, function(r){
-        $.each(r, function(name, data){
+    $.getJSON(url, params, function(r){
+        if(!r.bounds)
+        {
+            $(area).html('<div class="alert alert-info">There is no data available! Please try again later.</div>');
+            return;
+        }
+
+        $.each(r.data, function(name, data){
             series_data.push({
                 'name': name,
                 'data': data,
@@ -161,14 +166,27 @@ function drawChart(url, area){
 
         if(!series_data.length)
         {
-            $(area).html('<div class="alert alert-info">There is no data available! Please try again later.</div>');
-            return;
+            // If there were no data at all, the !r.bounds condition would have already returned.
+            // This situation means that selected (or default) range is empty. Therefore we need to
+            // reload the chart, setting available range.
+            return drawChart(url, area, {end:r.bounds[1]}); // start is automatically set to 24 hours before end
         }
 
         if(typeof $(area).highcharts()=='undefined')
         {
             // drawing for the first time
             $(area).highcharts('StockChart', {
+                navigator : {
+                    adaptToUpdatedData: false,
+                    series: {'name':'Navigator', 'data':[
+                        [r.bounds[0], null],
+                        [r.bounds[1], null],
+                    ]}
+                    /*xAxis: {
+                        min: r.bounds[0],
+                        max: r.bounds[1]
+                    }*/
+                },
                 rangeSelector : {
                     buttons: [{
                         type: 'hour',
@@ -187,22 +205,35 @@ function drawChart(url, area){
                         count: 1,
                         text: '1d'
                     }, {
-                        type: 'week',
-                        count: 1,
-                        text: '1w'
-                    }, {
                         type: 'all',
                         text: 'All'
                     }],
                     inputEnabled: false,
-                    selected: 0
+                    selected: 0,
                 },
                 legend: {
                     enabled: true
                 },
                 series: series_data,
                 xAxis: {
-                    minTickInterval: 60000
+                    minTickInterval: 60000,
+                    events: {
+                        afterSetExtremes: function(e) {
+                            var axis = $(area).highcharts().xAxis[0];
+                            // the user may be navigating over the available area
+                            if(e.min<axis.dataMin || e.max>axis.dataMax)
+                            {
+                                console.log('don\'t take it easy');
+                                // when the user is using a slider, this event is being called all the time
+                                // to avoid unnecessary requests, we'll wait 0.1 s before updating data
+                                clearTimeout($(area).data('update-timer'));
+                                $(area).data('update-timer', setTimeout(function(){
+                                    console.log('reload');
+                                    drawChart(url, area, {start:e.min, end:e.max});
+                                }, 100));
+                            }
+                        }
+                    }
                 }
             });
         }
@@ -210,7 +241,9 @@ function drawChart(url, area){
         {
             // updating series
             $.each($(area).highcharts().series, function(i,series){
-                series.setData(r[series.name], true);
+                if(series.name=='Navigator')
+                    return true;
+                series.setData(r.data[series.name]);
             });
             //$(area).highcharts().redraw();
         }
@@ -321,17 +354,17 @@ function update_state(state)
     
     if(state=='off')
     {
-        $('#controller-stop, #controller-restart').prop('disabled', true);
-        $('#controller-start').prop('disabled', false);
+        $('#controller-stop, #controller-restart').parent().addClass('disabled');
+        $('#controller-start').parent().removeClass('disabled');
     }
     else if(state=='stopping' || state=='unreachable')
     {
-        $('#controller-start, #controller-stop, #controller-restart').prop('disabled', true);
+        $('#controller-start, #controller-stop, #controller-restart').parent().addClass('disabled');
     }
     else
     {
-        $('#controller-stop, #controller-restart').prop('disabled', false);
-        $('#controller-start').prop('disabled', true);
+        $('#controller-stop, #controller-restart').parent().removeClass('disabled');
+        $('#controller-start').parent().addClass('disabled');
     }
 }
 
@@ -343,19 +376,40 @@ $.get('/controller/status', function(d){
 stream = new EventSource('/controller/stream');
 stream.onupdated = [];
 stream.addEventListener('message', function(e) {
-    var msg = $.parseJSON(e.data);
-    if(msg.level=='STATECHANGE')
+    var msg = e.data;
+    update_state(msg);
+    
+    if(msg=='idle') // loading new data has just been finished
     {
-        update_state(msg.message);
-        
-        if(msg.message=='idle') // loading new data has just been finished
-        {
-            $.each(stream.onupdated, function(i,fx){
-                fx();
-            });
-        }
+        $.each(stream.onupdated, function(i,fx){
+            fx();
+        });
     }
 }, false);
 stream.addEventListener('error', function() {
     update_state('unreachable');
 }, false);
+
+$('#controller-start').on('click', function(e){
+    e.preventDefault()
+    if($(this).parent().hasClass('disabled'))
+        return;
+    
+    $.get('/controller/start');
+});
+
+$('#controller-stop').on('click', function(e){
+    e.preventDefault()
+    if($(this).parent().hasClass('disabled'))
+        return;
+    
+    $.get('/controller/stop');
+});
+
+$('#controller-restart').on('click', function(e){
+    e.preventDefault()
+    if($(this).parent().hasClass('disabled'))
+        return;
+    
+    $.get('/controller/restart');
+});

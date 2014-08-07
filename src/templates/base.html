@@ -7,6 +7,7 @@
    <title>lab monitor</title>
 
    <!-- Bootstrap -->
+   <!--<link href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">-->
    <link href="//netdna.bootstrapcdn.com/bootswatch/latest/lumen/bootstrap.min.css" rel="stylesheet">
    <link href="//maxcdn.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css" rel="stylesheet">
 
@@ -47,11 +48,20 @@
            </li>
            {% endif %}
            <li{{ ' class="active"'|safe if request.url_rule.endpoint.startswith('config') else '' }}><a href="{{ url_for('config') }}">Configuration</a></li>
-           <li{{ ' class="active"'|safe if request.url_rule.endpoint.startswith('controller') else '' }}><a href="{{ url_for('controller') }}">Controller</a></li>
            <li{{ ' class="active"'|safe if request.url_rule.endpoint.startswith('esxi') else '' }}><a href="{{ url_for('esxi', rack_id=0) }}">ESXi</a></li>
-           <li{{ ' class="active"'|safe if 'shutdown'==request.url_rule.endpoint else '' }}><a href="{{ url_for('shutdown') }}" data-confirm="Do you really want to shutdown?">Shutdown</a></li>
          </ul>
-         <p class="navbar-text navbar-right"><span id="controller-status"></span></p>
+
+         <ul class="nav navbar-nav navbar-right">
+        <li class="dropdown">
+          <a href="#" class="dropdown-toggle" data-toggle="dropdown"><span id="controller-status"></span> <span class="caret"></span></a>
+          <ul class="dropdown-menu" role="menu">
+            <li><a href="#" id="controller-start"><i class="fa fa-fw fa-play"></i> Start</a></li>
+            <li><a href="#" id="controller-stop"><i class="fa fa-fw fa-stop"></i> Stop</a></li>
+            <li><a href="#" id="controller-restart"><i class="fa fa-fw fa-refresh"></i> Restart</a></li>
+          </ul>
+        </li>
+      </ul>
+
        </div><!--/.nav-collapse -->
      </div>
    </div>

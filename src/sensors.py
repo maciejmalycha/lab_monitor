@@ -1,6 +1,8 @@
+import logging
+import re
+
 import paramiko
 import gevent, gevent.monkey
-import re
 
 paramiko.Transport._preferred_ciphers = ( 'aes128-cbc', '3des-cbc' )
 paramiko.Transport._preferred_macs = ( 'hmac-md5', 'hmac-sha1' )
@@ -18,6 +20,10 @@ class ILoSSHClient(paramiko.SSHClient):
         raise paramiko.ssh_exception.SSHException("No authentication methods available")
 
 
+class HostUnreachableException(Exception):
+    pass
+
+
 class SSHiLoSensors:
 
     def __init__(self, host="pl-byd-esxi13-ilo", user="Administrator", password="ChangeMe"):
@@ -25,41 +31,62 @@ class SSHiLoSensors:
         self.user = user
         self.password = password
 
+        self.log = logging.getLogger('lab_monitor.sensors.SSHiLoSensors')
+        self.log.info("Initializing")
+
         self.ssh = ILoSSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.connect()
         self.detect_components()
-    
+
     def connect(self):
         """Establishes connection with the iLo server"""
+        self.log.info("Connecting to the iLo server at %s", self.host)
         self.ssh.connect(self.host, username=self.user, password=self.password)
 
     def disconnect(self):
         """Disconnects from the iLo server"""
+        self.log.info("Disconnecting from the iLo server")
         self.ssh.close()
 
     def detect_components(self):
         """Loads all the power supplies and temperature sensors that will be monitored"""
+        self.log.info("Detecting components")
         system = self.show("/system1", False)
 
-        self.sensors = ["/system1/%s"%a for a in re.findall("    (sensor\d)", system)]
-        self.power_supplies = ["/system1/%s"%a for a in re.findall("    (powersupply\d)", system)]
+        # I use list(set(...)) to remove duplicates, because they are there in the output
+        self.sensors = list(set("/system1/{0}".format(a) for a in re.findall("    (sensor\d)", system)))
+        self.power_supplies = list(set("/system1/{0}".format(a) for a in re.findall("    (powersupply\d)", system)))
+
+        self.log.info("Found %u temperature sensors and %u power supplies", len(self.sensors), len(self.power_supplies))
 
     def show(self, component, autoparse=True, original=False):
-        """Executes `show` command on the remote server and parses the output as a dictionary"""
+        """Executes `show component` command on the remote server.
+        If autoparse is set to True (by default it is), the output is be parsed as a dictionary.
+        If original is set to True, unparsed output is also returned as the 2nd element of a tuple"""
 
-        cmd = "show "+component
+        cmd = "show {0}".format(component)
+
+        self.log.debug("Executing `%s` on %s", cmd, self.host)
 
         success = False
-        while not success:
+        for _ in range(3):
             try:
                 stdin,stdout,stderr = self.ssh.exec_command(cmd)
                 success = True
-            except paramiko.SSHException:
+                break
+            except paramiko.SSHException as e:
+                self.log.warning("Command failed (%s), reconnecting", e)
                 self.disconnect()
                 self.connect()
 
+        if not success:
+            self.log.error("Reconnection failed 3 times")
+            raise HostUnreachableException()
+
         output = stdout.read()
+        self.log.debug("Command successful, received %u bytes of output", len(output))
+
         gevent.sleep(0.01) # otherwise, if executed in a loop, the program throws paramiko.ssh_exception.SSHException: Unable to open channel
 
         if autoparse:
@@ -72,32 +99,46 @@ class SSHiLoSensors:
 
     def server_status(self):
         """Checks server status"""
+        self.log.info("Checking status")
+
         response = self.show("/system1")
-        return response['enabledstate']=="enabled"
+        try:
+            return response['enabledstate']=="enabled"
+        except KeyError:
+            self.log.warning("Cannot find 'enabledstate', returning False")
+            return False
 
     def power_use(self):
         """Returns power usage"""
+        self.log.info("Checking power usage")
+
         response = self.show("/system1")
 
         data = {}
         for key,ilo_key in [('present','oemhp_PresentPower'), ('avg','oemhp_AveragePower'), ('min','oemhp_MinPower'), ('max','oemhp_MaxPower')]:
             try:
                 data[key] = int(response[ilo_key].split()[0])
-            except KeyError:
+            except (KeyError, ValueError):
+                self.log.warning("Cannot parse data for %s", ilo_key)
                 data[key] = None
 
         return data
 
     def power_units(self):
         """ Returns health states and operational statuses of all power supplies"""
+        self.log.info("Checking power units")
+
         data = {}
 
         for component in self.power_supplies:
             response = self.show(component)
-            data[response['ElementName']] = {
-                'operational': response['OperationalStatus'],
-                'health': response['HealthState']
-            }
+            try:
+                data[response['ElementName']] = {
+                    'operational': response.get('OperationalStatus')=='Ok',
+                    'health': response.get('HealthState')=='Ok'
+                }
+            except KeyError:
+                self.log.warning("Cannot parse data for %s", component)
 
         return data
 
@@ -107,7 +148,11 @@ class SSHiLoSensors:
 
         for component in self.sensors:
             response = self.show(component)
-            if response['CurrentReading'] != 'N/A':
-                data[response['ElementName']] = int(response['CurrentReading'])
-            
+            try:
+                if response['CurrentReading'] != 'N/A':
+                    data[response['ElementName']] = int(response['CurrentReading'])
+            except (KeyError, ValueError):
+                self.log.warning("Cannot parse data for %s", component)
+
+
         return data
