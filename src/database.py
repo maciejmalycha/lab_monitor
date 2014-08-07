@@ -103,8 +103,8 @@ class PowerUnits(Base):
     timestamp = Column(DateTime)
     server = Column(String(30))
     power_supply = Column(String(30))
-    operational = Column(String(30))
-    health = Column(String(30))
+    operational = Column(Boolean)
+    health = Column(Boolean)
 
     def __init__(self, server, power_supply, operational, health):
         self.timestamp = datetime.now()
@@ -178,7 +178,7 @@ class ServersDAO(DAO):
                             .order_by(desc(Temperature.timestamp)) \
                             .first()
 
-                        row['power_supplies'] = [unit.health=='Ok' and unit.operational=='Ok' for unit in power_units]
+                        row['power_supplies'] = [unit.health and unit.operational for unit in power_units]
                         row['temperature'] = u"{0}\u00b0".format(temperature.reading)
                     except AttributeError:
                         row['power_supplies'] = []

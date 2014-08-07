@@ -134,8 +134,8 @@ class SSHiLoSensors:
             response = self.show(component)
             try:
                 data[response['ElementName']] = {
-                    'operational': response.get('OperationalStatus'),
-                    'health': response.get('HealthState')
+                    'operational': response.get('OperationalStatus')=='Ok',
+                    'health': response.get('HealthState')=='Ok'
                 }
             except KeyError:
                 self.log.warning("Cannot parse data for %s", component)
