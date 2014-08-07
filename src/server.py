@@ -5,8 +5,7 @@ import datetime
 import paramiko
 
 import database
-import sensors
-from minuteworker import MinuteWorker
+from sensors import HostUnreachableException
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
@@ -183,27 +182,52 @@ class ESXiVirtualMachine:
 
 
 class Server:
-    def __init__(self, hypervisor, sensor, sensor_dao):
+    def __init__(self, addr, hypervisor, sensors, sensors_dao):
+        self.addr = addr
         self.alarms = []
         self.hypervisor = hypervisor
-        self.sensor = sensor
-        self.sensor_dao = sensor_dao
+        self.sensors = sensors
+        self.sensors_dao = sensors_dao
         self.server_status = None
-        self.power_units = [None, None]
+        self.power_units = {'Power Supply 1': None, 'Power Supply 2': None}
+        self.power_usage = {'present': None, 'average': None, 'minimum': None, 'maximum': None}
         self.last_reading = None
         self.temperature = {}
 
     def register_alarm(self, alarm):
         self.alarms.append(alarm)
 
-    def notify_alarms(self, alarm):
+    def notify_alarms(self):
         for alarm in self.alarms:
-            alarm.check(self)
+            alarm.check()
 
     def add_reading(self, name, value):
         #TODO: Add reading to readings dictionary
-        pass
+        self.temperature[name] = value # ?
 
+    def check_status(self):
+        try:
+            self.server_status = self.sensors.server_status()
+            self.power_usage = self.sensors.power_use()
+            self.power_units = self.sensors.power_units()
+            self.temperature = self.sensors.temp_sensors()
+
+        except HostUnreachableException:
+            # it has already been logged
+            self.server_status = False
+
+        self.last_reading = datetime.datetime.now()
+
+    def store_status(self):
+        self.sensors_dao.store_status(self.addr, self.server_status)
+
+        self.sensors_dao.store_power_usage(self.addr, **self.power_usage)
+
+        for unit, state in self.power_units.iteritems():
+            self.sensors_dao.store_power_unit(self.addr, unit, **state)
+
+        for sensor, reading in self.temperature.iteritems():
+            self.sensors_dao.store_temperature(self.addr, sensor, reading)
 
 
 class Rack:
