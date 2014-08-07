@@ -70,7 +70,7 @@ class ESXiHypervisor:
             VMSL[vmid] = act_vm
         return VMSL
 
-    #Shutting down every working VM
+
     def shutdown(self, timeout):
         VMSL = self.status()
         VMidSL = VMSL.keys()
@@ -83,7 +83,6 @@ class ESXiHypervisor:
                 self.log.warning("vmWareTools not installed on vm id=%s Can't perform shutdown", i)
             else:
                 err = self.shutdown_vm(int(i))
-               # err.read()
                 self.log.info("Shutting down VM: %s", i)
         start = time.time()
         elapsed = time.time()
@@ -117,7 +116,6 @@ class ESXiHypervisor:
                 out = self.force_shutdown_vm(int(i))
             else:
                 err = self.shutdown_vm(int(i))
-              #  err.read()
                 self.log.info("Shutting down VM: %s", i)
         start = time.time()
         elapsed = time.time()
@@ -276,4 +274,5 @@ class Laboratory:
                 for hyp in res:
                     self.log.info("Shutdown failed. Forcing shutdown of a hypervisor: %s", hyp.addr)
                     hyp.force_shutdown(timeout)
+
 
