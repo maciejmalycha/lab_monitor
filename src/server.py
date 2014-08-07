@@ -184,6 +184,7 @@ class ESXiVirtualMachine:
 class Server:
     def __init__(self, addr, hypervisor, sensors, sensors_dao):
         self.addr = addr
+        self.rack = rack
         self.alarms = []
         self.hypervisor = hypervisor
         self.sensors = sensors
@@ -231,16 +232,19 @@ class Server:
 
 
 class Rack:
-    def __init__(self, rack_id, servers_dao, sensors_dao):
+    def __init__(self, rack_id):
         self.id = rack_id
         self.servers = []
         self.log = logging.getLogger("lab_monitor.server.Rack")
         self.log.setLevel(logging.INFO)
         self.log.info("Initialazing rack with id=%s", self.id)
-        self.servers_dao = servers_dao
-        self.sensors_dao = sensors_dao
+        
 
     def add_server(self, server):
+        server.rack = self
+        self.lab.servers[server.addr] = server
+        self.lab.hypervisors[server.hypervisor.addr] = server.hypervisor
+
         self.servers.append(server)
 
     def register_alarm(self, alarm):
@@ -286,39 +290,22 @@ class Rack:
 
 
 class Laboratory:
-    def __init__(self, servers_dao, sensors_dao):
+    def __init__(self):
         self.racks = []
         self.log = logging.getLogger("lab_monitor.server.Laboratory")
         self.log.setLevel(logging.INFO)
         self.log.info("Initialazing lab")
-        self.servers_dao = servers_dao
-        self.sensors_dao = sensors_dao
+
+        self.servers = {}
+        self.hypervisors = {}
 
     def add_rack(self, rack):
+        rack.lab = self
+
         self.racks.append(rack)
 
     def register_alarm(self, alarm):
         self.alarms.append(alarm)
-
-    def iter_servers(self):
-        for rack in self.racks:
-            for server in rack.servers:
-                yield server
-
-    def servers(self):
-        return list(self.iter_servers())
-
-    def prepare_racks(self):
-        for rackid in range(7):
-            self.add_rack(Rack(rackid, self.servers_dao, self.sensors_dao))
-
-    def init_racks(self):
-        for rack in self.racks:
-            rack.prepare_servers()
-
-    def init_structure(self):
-        self.prepare_racks()
-        self.init_racks()
 
     def status(self):
         for rack in self.racks:
