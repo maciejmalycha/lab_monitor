@@ -38,7 +38,7 @@ class SSHiLoSensors:
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.connect()
         self.detect_components()
-    
+
     def connect(self):
         """Establishes connection with the iLo server"""
         self.log.info("Connecting to the iLo server at %s", self.host)
@@ -82,7 +82,7 @@ class SSHiLoSensors:
 
         if not success:
             self.log.error("Reconnection failed 3 times")
-            raise ServerUnreachableException
+            raise HostUnreachableException()
 
         output = stdout.read()
         self.log.debug("Command successful, received %u bytes of output", len(output))
@@ -154,5 +154,5 @@ class SSHiLoSensors:
             except (KeyError, ValueError):
                 self.log.warning("Cannot parse data for %s", component)
 
-            
+
         return data

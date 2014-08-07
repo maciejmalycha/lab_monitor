@@ -1,9 +1,11 @@
 import logging
 import time
+import datetime
 
 import paramiko
 
 import database
+from minuteworker import MinuteWorker
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
@@ -52,7 +54,7 @@ class ESXiHypervisor:
         else:
             self.log.error("Error occurred. Status didn't change after elapsed time.")
             return False
-    
+
 
     #IDs of VMs are stored in an array, then we loop over IDs and get their statuses
     #If status is 'on', then we shutdown the VM and we add the ID to the list of IDs that are already shutted down by us
@@ -178,81 +180,100 @@ class ESXiVirtualMachine:
 
     #Force shutting down of a VM
     def force_shutdown(self):
-        return self.hESXiHypervisor.force_shutdown_vm(self.id)
+        return self.hypervisor.force_shutdown_vm(self.id)
+
+
+class Server:
+    def __init__(self, hypervisor, sensor, sensor_dao):
+        self.alarms = []
+        self.hypervisor = hypervisor
+        self.sensor = sensor
+        self.sensor_dao = sensor_dao
+        self.server_status = None
+        self.power_units = [None, None]
+        self.last_reading = None
+        self.temperature = {}
+
+    def register_alarm(self, alarm):
+        self.alarms.append(alarm)
+
+    def notify_alarms(self, alarm):
+        for alarm in self.alarms:
+            alarm.check(self)
+
+    def add_reading(self, name, value):
+        #TODO: Add reading to readings dictionary
+        pass
+
+
 
 class Rack:
     def __init__(self, rackid):
         self.id = rackid
+        self.servers = []
         self.log = logging.getLogger("lab_monitor.server.Rack")
         self.log.setLevel(logging.INFO)
         self.log.info("Initialazing rack with id=%s", self.id)
 
-    def get_hypervisors_from_db(self):
-        print database.ServersDAO().server_list(self.id)
-        return database.ServersDAO().hypervisor_list(self.id)
-    
-    def get_hypervisors_ready(self):
-        return [ESXiHypervisor(hyperv['addr']) for hyperv in self.get_hypervisors_from_db()]
-        
+    def add_server(self, server):
+        self.servers.append(server)
+
     def status(self):
-        hyper_list = self.get_hypervisors_ready()
-        if not hyper_list:
+        if not self.servers:
             self.log.error("Not found")
-        for hypervisor in hyper_list:
-            self.log.info("Getting status of %s", hypervisor.addr)
-            self.log.info("%s", hypervisor.status())
+        for server in self.servers:
+            self.log.info("Getting status of %s", server.hypervisor.addr)
+            self.log.info("%s", server.hypervisor.status())
 
     def shutdown(self, timeout):
-        hyper_list = self.get_hypervisors_ready()
         force_list = []
-        for hypervisor in hyper_list:
-            self.log.info("Initialazing shutdown on %s", hypervisor.addr)
-            err = hypervisor.shutdown(timeout)
+        for server in self.servers:
+            self.log.info("Initialazing shutdown on %s", server.hypervisor.addr)
+            err = server.hypervisor.shutdown(timeout)
             if err:
                 self.log.info("Everything went OK")
             else:
                 self.log.error("Something went wrong. Error occurred.\nAdding hypervisor to force_list")
-                force_list.append(hypervisor)
+                force_list.append(server.hypervisor)
         return force_list if force_list else None
 
     def force_shutdown(self, timeout):
-        hyper_list = self.get_hypervisors_ready()
-        for hypervisor in hyper_list:
-            self.log.info("Initialazing shutdown on %s", hypervisor.addr)
-            err = hypervisor.shutdown(timeout)
+        for server in self.servers:
+            self.log.info("Initialazing shutdown on %s", server.hypervisor.addr)
+            err = server.hypervisor.shutdown(timeout)
             if err:
                 self.log.info("Everything went OK")
             else:
                 self.log.error("Something went wrong. Error occurred.\nInitialazing force_shutdown")
-                hypervisor.force_shutdown(timeout)
+                server.hypervisor.force_shutdown(timeout)
+
 
 class Laboratory:
     def __init__(self):
+        self.racks = []
         self.log = logging.getLogger("lab_monitor.server.Laboratory")
         self.log.setLevel(logging.INFO)
         self.log.info("Initialazing lab")
 
-    def get_racks(self):
-        return [Rack(rackid) for rackid in range(7)]
+    def add_rack(self, rack):
+        self.racks.append(rack)
 
     def status(self):
-        racks = self.get_racks()
-        for rack in racks:
+        for rack in self.racks:
             self.log.info("Getting status of rack %s", rack.id)
             rack.status()
 
     def shutdown(self, timeout):
-        racks = self.get_racks()
-        for rack in racks:
+        for rack in self.racks:
             self.log.info("Initialazing shutdown on rack: %s", rack.id)
             rack.shutdown(timeout)
 
     def force_shutdown(self, timeout):
-        racks = self.get_racks()
-        for rack in racks:
+        for rack in self.racks:
             self.log.info("Initialazing shutdown on rack: %s", rack.id)
             res = rack.shutdown(timeout)
             if res is not None:
                 for hyp in res:
                     self.log.info("Shutdown failed. Forcing shutdown of a hypervisor: %s", hyp.addr)
                     hyp.force_shutdown(timeout)
+
