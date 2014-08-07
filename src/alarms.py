@@ -1,140 +1,118 @@
-from collections import defaultdict
-import string
+import datetime
 
-class Alarm(object):
+
+class Alarm:
     """An alarm is used to keep track of changing parameters in the system.
     Each one belongs to a specific group of related alarms, has certain priority
     and a text message (with str.format-compatible keyword placeholders)
     for active and inactive state."""
 
-    instances = defaultdict(lambda: defaultdict(list))
+    on_message = ""
+    off_message = ""
 
-    def __init__(self, group, priority, on_message, off_message, **kwargs):
-        self.priority = priority
-        self.group = group
-        self.on_message = on_message
-        self.off_message = off_message
+    def __init__(self, master, resource, engine, delay, **kwargs):
+        self.master = master
+        self.children = []
+        self.master.register(self)
+        self.resource = resource
+        self.notification_engine = engine
+        self.delay = delay
 
         self.active = False
-        self.kwargs = defaultdict(lambda: 'N/A')
+        self.changed = datetime.datetime.now()
+        self.kwargs = {}
         self.kwargs.update(kwargs)
         self.sent = True
-
-        Alarm.instances[self.group][self.priority].append(self)
 
     def update(self, active, **kwargs):
         """Sets the alarm state to active or inactive;
         optional **kwargs will be formatted into the message"""
+        self.kwargs.update(kwargs)
         if self.active != active:
             self.sent = False
+            self.active = active
+            self.changed = datetime.datetime.now()
+            self.master.check()
+        self.notify()
 
-        self.active = active
-        self.kwargs.update(kwargs)
-
-    def activate(self, **kwargs):
-        self.update(True, **kwargs)
-
-    def deactivate(self, **kwargs):
-        self.update(False, **kwargs)
-
-    def check_send(self):
-        """Decides whether the alarm has been updated recently
-        and should be sent. If so, marks the alarm as sent."""
-        if self.sent:
-            return False
-        else:
+    def notify(self):
+        now = datetime.datetime.now()
+        if self.master is not None and self.master.active == self.active:
+            return
+        if not self.sent and (now - self.changed) > self.delay:
+            msg = self.on_message if self.active else self.off_message
+            self.notification_engine.send(msg.format(**self.kwargs))
             self.sent = True
-            return True
 
-    def __nonzero__(self):
-        """Returns True if the alarm is active, otherwise False"""
-        return self.active
+    def check(self):
+        pass
 
-    def __str__(self):
-        """Returns a formatted on/off message."""
-        msg = self.on_message if self.active else self.off_message
-        return string.Formatter().vformat(msg, (), self.kwargs)
+    def register(self, child):
+        self.children.append(child)
+
+
+class ConnectionAlarm(Alarm):
+
+    on_message = "Connection with {server} lost. Last reading from {date}"
+    off_message = "Connection with {server} restored"
+
+    def check(self):
+        self.kwargs['date'] = self.resource.last_update
+        self.update(self.kwargs['date'] > self.kwargs['threshold'])
+
+
+class UPSServerPowerAlarm(Alarm):
+
+    on_message = "Partial power loss in server {server} detected. Suspected PDU 1 failure"
+    off_message = "Power restored in server {server}"
+
+    def check(self):
+        self.update(self.resource.power_units[0])
+
+
+class GridServerPowerAlarm(Alarm):
+
+    on_message = "Partial power loss in server {server} detected. Suspected PDU 2 failure"
+    off_message = "Power restored in server {server}"
+
+    def check(self):
+        self.update(self.resource.power_units[1])
+
+
+class UPSRackPowerAlarm(Alarm):
+
+    on_message = "Partial power loss in rack {rack} detected. Suspected UPS failure. Shutdown in {number} minutes."
+    off_message = "Power restored in rack {rack}"
+
+    def check(self):
+        total = len(self.children)
+        count = len([alarm for alarm in self.children if alarm.active])
+        self.update(2 * count > total)
+
+
+class GridRackPowerAlarm(Alarm):
+
+    on_message = "Partial power loss in rack {rack} detected. Suspected power grid failure"
+    off_message = "Power restored in rack {rack}"
+
+    def check(self):
+        total = len(self.children)
+        count = len([alarm for alarm in self.children if alarm.active])
+        self.update(2 * count > total)
+
+        now = datetime.datetime.now()
+        if self.active and (now - self.changed) > 60 * self.kwargs['number']:
+            self.notification_engine.send("Shutting down rack {rack}".format(**self.kwargs))
+            self.resource.force_shutdown()
 
 
 class TemperatureAlarm(Alarm):
-    """A special alarm for temperature readings"""
 
-    def __init__(self, priority, threshold,
-                 on_message="Temperature of {server} at {sensor} reached {reading} C",
-                 off_message="Temperature of {server} at {sensor} dropped to {reading} C",
-                 **kwargs):
-        super(TemperatureAlarm, self).__init__(
-            'temperature', priority, on_message, off_message, **kwargs
-        )
-        self.reading = None
-        self.threshold = threshold
+    on_message = "Temperature of {server} at {sensor} reached {reading} C"
+    off_message = "Temperature of {server} at {sensor} dropped to {reading} C"
 
-    def update(self, reading):
-        self.reading = reading
-        super(TemperatureAlarm, self) \
-            .update(self.reading>=self.threshold,reading=self.reading)
-
-class MasterAlarm(Alarm):
-    """An alarm that is considered on if certain number of watched alarms is on"""
-
-    def __init__(self, *args, **kwargs):
-        super(MasterAlarm, self).__init__(*args, **kwargs)
-        self.watched = []
-        self.threshold = 1
-
-    def add_watched(self, alarm):
-        self.watched.append(alarm)
-
-    def set_threshold(self, threshold):
-        if threshold > 0:
-            self.threshold = threshold
-
-    def update(self):
-        """Set the active state by checking if enough watched alarms are on.
-        Must be called manually after (potential) update of watched alarms"""
-        active = len(filter(None, self.watched)) >= self.threshold
-        if self.active != active:
-            self.sent = False
-
-        self.active = active
-
-    def check_send(self):
-        """Decides whether the alarm has been updated recently
-        and should be sent. If so, marks the alarm as sent."""
-        if self.sent:
-            return False
-        else:
-            self.sent = True
-            for alarm in self.watched:
-                alarm.sent = True
-            
-            return True
-
-class Sender(object):
-    """A trivial sender for testing purposes"""
-    def send(self, msg):
-        print msg
+    def check(self):
+        self.kwargs['reading'] = self.resource.temperature[self.sensor]
+        self.update(self.kwargs['reading'] > self.kwargs['threshold'])
 
 
-class Notifications(object):
-    """Pushes notifications about updated alarms via senders
-    (objects with send method)."""
-    def __init__(self):
-        self.senders = []
-
-    def add_sender(self, sender):
-        self.senders.append(sender)
-
-    def notify(self):
-        """Sends active alarm of the highest priority from each group.
-        This method must be called manually after updating all alarms."""
-        for group, priorities in Alarm.instances.iteritems():
-            sent = False
-            for priority in sorted(priorities, reverse=True):
-                for alarm in priorities[priority]:
-                    if alarm.check_send():
-                        for sender in self.senders:
-                            sender.send(str(alarm))
-                        sent = True
-                if sent:
-                    break
