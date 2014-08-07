@@ -115,7 +115,13 @@ class SSHiLoSensors:
         response = self.show("/system1")
 
         data = {}
-        for key,ilo_key in [('present','oemhp_PresentPower'), ('avg','oemhp_AveragePower'), ('min','oemhp_MinPower'), ('max','oemhp_MaxPower')]:
+        ilo_keys = [
+            ('present', 'oemhp_PresentPower'),
+            ('average', 'oemhp_AveragePower'),
+            ('minimum', 'oemhp_MinPower'),
+            ('maximum', 'oemhp_MaxPower')
+        ]
+        for key, ilo_key in ilo_keys:
             try:
                 data[key] = int(response[ilo_key].split()[0])
             except (KeyError, ValueError):
