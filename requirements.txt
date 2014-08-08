@@ -7,9 +7,8 @@ Werkzeug==0.9.6
 argparse==1.2.1
 dnspython==1.11.1
 ecdsa==0.11
-gevent==1.0.1
-greenlet==0.4.2
 itsdangerous==0.24
 paramiko==1.14.0
 pycrypto==2.6.1
+redis==2.10.1
 xmpppy==0.5.0rc1

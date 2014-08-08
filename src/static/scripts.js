@@ -27,8 +27,7 @@ $.fn.ajaxSubmit = function() {
     });
 }
 
-function rackDiagram(ctx, map, url_template, rack) {
-    var racks = 7;
+function rackDiagram(ctx, map, url_template, lab, racks) {
     var units = 42;
 
     var width = ctx.canvas.width;
@@ -37,17 +36,17 @@ function rackDiagram(ctx, map, url_template, rack) {
     var rack_width = parseInt(width/racks);
     var unit_height = parseInt(height/units);
 
-    if(typeof rack!='undefined')
+    if(typeof lab!='undefined')
     {
         // on resize this function is called again to redraw things, 
         // but there's no need to reload the data from server,
         // that's why we'll store it here 
-        ctx.rack = rack;
+        ctx.lab = lab;
     }
-    else if(typeof ctx.rack!='undefined')
+    else if(typeof ctx.lab!='undefined')
     {
         // no new data, but the size has changed
-        rack = ctx.rack;
+        lab = ctx.lab;
     }
     else
     {
@@ -81,7 +80,7 @@ function rackDiagram(ctx, map, url_template, rack) {
         ctx.closePath();
     }
 
-    $.each(rack, function(i, server){
+    $.each(lab, function(i, server){
 
         var x = parseInt(server.rack*rack_width);
         var w = rack_width;
@@ -346,34 +345,34 @@ $(function(){
 
 function update_state(state)
 {
-    $.fx.off = !$('#controller-status').html().length;
-    $('#controller-status').fadeOut('fast', function(){
-        $('#controller-status').html('Controller is '+state).fadeIn('fast');
+    $.fx.off = !$('#monitor-status').html().length;
+    $('#monitor-status').fadeOut('fast', function(){
+        $('#monitor-status').html('Monitor is '+state).fadeIn('fast');
     });
     $.fx.off = false;
     
     if(state=='off')
     {
-        $('#controller-stop, #controller-restart').parent().addClass('disabled');
-        $('#controller-start').parent().removeClass('disabled');
+        $('#monitor-stop, #monitor-restart').parent().addClass('disabled');
+        $('#monitor-start').parent().removeClass('disabled');
     }
     else if(state=='stopping' || state=='unreachable')
     {
-        $('#controller-start, #controller-stop, #controller-restart').parent().addClass('disabled');
+        $('#monitor-start, #monitor-stop, #monitor-restart').parent().addClass('disabled');
     }
     else
     {
-        $('#controller-stop, #controller-restart').parent().removeClass('disabled');
-        $('#controller-start').parent().addClass('disabled');
+        $('#monitor-stop, #monitor-restart').parent().removeClass('disabled');
+        $('#monitor-start').parent().addClass('disabled');
     }
 }
 
 
-$.get('/controller/status', function(d){
+$.get('/monitor/status', function(d){
     update_state(d);
 });
 
-stream = new EventSource('/controller/stream');
+stream = new EventSource('/monitor/stream');
 stream.onupdated = [];
 stream.addEventListener('message', function(e) {
     var msg = e.data;
@@ -390,26 +389,26 @@ stream.addEventListener('error', function() {
     update_state('unreachable');
 }, false);
 
-$('#controller-start').on('click', function(e){
+$('#monitor-start').on('click', function(e){
     e.preventDefault()
     if($(this).parent().hasClass('disabled'))
         return;
     
-    $.get('/controller/start');
+    $.get('/monitor/start');
 });
 
-$('#controller-stop').on('click', function(e){
+$('#monitor-stop').on('click', function(e){
     e.preventDefault()
     if($(this).parent().hasClass('disabled'))
         return;
     
-    $.get('/controller/stop');
+    $.get('/monitor/stop');
 });
 
-$('#controller-restart').on('click', function(e){
+$('#monitor-restart').on('click', function(e){
     e.preventDefault()
     if($(this).parent().hasClass('disabled'))
         return;
     
-    $.get('/controller/restart');
+    $.get('/monitor/restart');
 });

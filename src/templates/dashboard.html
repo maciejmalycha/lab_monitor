@@ -23,7 +23,7 @@ $(function(){
 
     var diagram = function() {
         $.getJSON('{{ url_for('json_servers') }}', function(d){
-            rackDiagram(ctx, map, '{{ url_for('status', server='_') }}', d.servers);
+            rackDiagram(ctx, map, '{{ url_for('status', server='_') }}', d.servers, {{ len(lab.racks) }});
         });
     }
 
@@ -34,7 +34,7 @@ $(function(){
     var respond = function(){
         canvas.attr('width', canvas.parent().width());
         $('#mapme').css('width', canvas.parent().width());
-        rackDiagram(ctx, map, '{{ url_for('status', server='_') }}');
+        rackDiagram(ctx, map, '{{ url_for('status', server='_') }}', undefined, {{ len(lab.racks) }});
     }
 
     respond();

@@ -13,7 +13,6 @@ class ESXiHypervisor:
         self.addr = hostname
 
         self.log = logging.getLogger("lab_monitor.server.ESXiHypervisor")
-        self.log.setLevel(logging.INFO)
         self.log.info("Connecting...")
 
         self.ssh = paramiko.SSHClient()
@@ -182,17 +181,18 @@ class ESXiVirtualMachine:
 
 
 class Server:
-    def __init__(self, addr, hypervisor, sensors, sensors_dao):
+    def __init__(self, addr, hypervisor, sensors, sensors_dao, record):
         self.addr = addr
-        self.rack = rack
         self.alarms = []
         self.hypervisor = hypervisor
         self.sensors = sensors
         self.sensors_dao = sensors_dao
+        self.record = record
+        self.rack = None
         self.server_status = None
         self.power_units = {'Power Supply 1': None, 'Power Supply 2': None}
         self.power_usage = {'present': None, 'average': None, 'minimum': None, 'maximum': None}
-        self.last_reading = None
+        self.last_reading = datetime.datetime.now()
         self.temperature = {}
 
     def register_alarm(self, alarm):
@@ -217,7 +217,8 @@ class Server:
             # it has already been logged
             self.server_status = False
 
-        self.last_reading = datetime.datetime.now()
+        if self.server_status:
+            self.last_reading = datetime.datetime.now()
 
     def store_status(self):
         self.sensors_dao.store_server_status(self.addr, self.server_status)
@@ -235,29 +236,23 @@ class Rack:
     def __init__(self, rack_id):
         self.id = rack_id
         self.servers = []
+        self.alarms = []
+        self.lab = None
         self.log = logging.getLogger("lab_monitor.server.Rack")
-        self.log.setLevel(logging.INFO)
         self.log.info("Initialazing rack with id=%s", self.id)
         
 
     def add_server(self, server):
         server.rack = self
+
         self.lab.servers[server.addr] = server
-        self.lab.hypervisors[server.hypervisor.addr] = server.hypervisor
+        if server.hypervisor is not None:
+            self.lab.hypervisors[server.hypervisor.addr] = server.hypervisor
 
         self.servers.append(server)
 
     def register_alarm(self, alarm):
         self.alarms.append(alarm)
-
-    def prepare_servers(self):
-        serv_list = self.servers_dao.server_list(self.id)
-        for serv in serv_list:
-            hyperv = ESXiHypervisor(serv['hypervisor']) if serv['hypervisor'] else None
-            sensors = sensors_mod.SSHiLoSensors(serv['addr'])
-            server = Server(serv['addr'], hyperv, sensors, self.sensors_dao)
-            # create alarms
-            self.add_server(server)
 
     def status(self):
         if not self.servers:
@@ -293,8 +288,9 @@ class Laboratory:
     def __init__(self):
         self.racks = []
         self.log = logging.getLogger("lab_monitor.server.Laboratory")
-        self.log.setLevel(logging.INFO)
         self.log.info("Initialazing lab")
+
+        self.alarms = []
 
         self.servers = {}
         self.hypervisors = {}

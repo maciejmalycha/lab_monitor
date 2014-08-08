@@ -1,0 +1,20 @@
+---
+  num_racks: 7
+  database: sqlite:///../lab_monitor.sqlite
+  temperature:
+    - sensor: Ambient Zone
+      warning: 20
+      critical: 25
+    - sensor: Power Supply Zone
+      warning: 45
+      critical: 50
+  alarm_delay: 2
+  shutdown_timeout: 5
+  xmpp:
+    recipient: m.malycha@gmail.com
+    sender: nieprzeklinaj@gmail.com
+    password: xxxxxxxxxxxxxxxx # use a google app password (https://security.google.com/settings/security/apppasswords)
+  redis: # those will be passed directly to redis.StrictRedis constructor
+    host: localhost
+    port: 6379
+    db: 0

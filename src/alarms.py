@@ -73,8 +73,11 @@ class ShutdownAlarm(Alarm):
     def shutdown(self):
         now = datetime.datetime.now()
         if self.active and (now - self.changed) > datetime.timedelta(minutes=self.kwargs['number']):
-            self.notification_engine.send(self.shutdown_message.format(**self.kwargs))
-            self.resource.hypervisor.force_shutdown()
+            if self.hypervisor is not None:
+                self.notification_engine.send(self.shutdown_message.format(**self.kwargs))
+                self.resource.hypervisor.force_shutdown()
+            else:
+                self.notification_engine.send("Hypervisor for {resource} not available".format(self.resource))
 
 
 ## SERVER ALARMS ##
@@ -85,8 +88,8 @@ class ConnectionAlarm(Alarm):
     off_message = "Connection with {server} restored"
 
     def check(self):
-        self.kwargs['date'] = self.resource.last_update
-        self.update(self.kwargs['date'] > self.kwargs['threshold'])
+        self.kwargs['date'] = self.resource.last_reading
+        self.update(datetime.datetime.now() - self.kwargs['date'] > datetime.timedelta(minutes=self.kwargs['threshold']))
 
 
 class UPSServerPowerAlarm(Alarm):
