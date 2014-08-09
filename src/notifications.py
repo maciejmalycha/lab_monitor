@@ -7,9 +7,13 @@ class Hangouts:
         self.password = config['password']
 
         self.jid = xmpp.protocol.JID(self.sender)
-        self.cl = xmpp.Client(self.jid.getDomain(),debug=[])
-        self.cl.connect() or raise IOError("Cannot connect to XMPP server")
-        self.cl.auth(self.jid.getNode(), self.password) or raise IOError("XMPP authentication failed")
+        self.cl = xmpp.Client(self.jid.getDomain(), debug=[])
+        conn = self.cl.connect()
+        if not conn:
+            raise IOError("Cannot connect to XMPP server")
+        auth = self.cl.auth(self.jid.getNode(), self.password)
+        if not auth:
+            IOError("XMPP authentication failed")
 
     def send(self, message):
         if not self.cl.isConnected():
