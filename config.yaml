@@ -1,6 +1,7 @@
 ---
   num_racks: 7
-  database: sqlite:///../lab_monitor.sqlite
+  database: sqlite:////absolute/path/to/lab_monitor.sqlite
+  logging_dir: /absolute/path/to/logs # without a trailing slash
   temperature:
     - sensor: Ambient Zone
       warning: 20

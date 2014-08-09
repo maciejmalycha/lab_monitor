@@ -2,6 +2,7 @@
 
 import atexit
 import logging, logging.handlers
+import os.path
 import sys
 
 import redis
@@ -44,7 +45,8 @@ if __name__ == '__main__':
     ch.setFormatter(format)
     baselog.addHandler(ch)
 
-    rfh = logging.handlers.TimedRotatingFileHandler('../logs/monitor', 'midnight')
+    log_file = os.path.join(config['logging_dir'], 'monitor')
+    rfh = logging.handlers.TimedRotatingFileHandler(log_file, 'midnight')
     rfh.setLevel(logging.INFO)
     rfh.setFormatter(format)
     baselog.addHandler(rfh)

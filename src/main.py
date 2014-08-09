@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import logging, logging.handlers
+import os.path
 import sys
 import subprocess
 
@@ -44,7 +45,9 @@ class LabMonitor:
         self.fe.lab = self.lab
 
     def monitor_start(self):
-        subprocess.Popen([sys.executable, 'monitor.py'], close_fds=True)
+        src = os.path.dirname(os.path.realpath(__file__))
+        monitor = os.path.join(src, 'monitor.py')
+        subprocess.Popen([sys.executable, monitor], close_fds=True)
 
     def monitor_stop(self):
         if self.monitor_status() != 'off':
@@ -86,7 +89,8 @@ if __name__ == '__main__':
     ch.setFormatter(format)
     baselog.addHandler(ch)
 
-    rfh = logging.handlers.TimedRotatingFileHandler('../logs/web', 'midnight')
+    log_file = os.path.join(config['logging_dir'], 'web')
+    rfh = logging.handlers.TimedRotatingFileHandler(log_file, 'midnight')
     rfh.setLevel(logging.INFO)
     rfh.setFormatter(format)
     baselog.addHandler(rfh)

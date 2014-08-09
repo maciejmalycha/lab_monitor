@@ -52,6 +52,7 @@ try:
     keys = {
         'num_racks': int,
         'database': str,
+        'logging_dir': str,
         'temperature': list,
         'alarm_delay': int,
         'shutdown_timeout': int,
@@ -81,14 +82,25 @@ for s in config['temperature']:
 success("Temperature alarms are configured properly")
 
 
-cwd = os.getcwd()
-os.chdir('src') # if sqlite is used, path is relative to src directory
+try:
+    path = config['logging_dir']
+    if not os.path.isdir(path):
+        error("Specified logging path is not a valid directory")
+    if path.endswith('/'):
+        error("Logging path has an unnecessary trailing slash")
+    if os.path.realpath(path) != path:
+        error("Logging path is not absolute (should be {0})".format(os.path.realpath(path)))
+    if not os.access(path, os.W_OK):
+        error("Logging directory is not writable")
+except Exception as e:
+    error("Logging path is invalid")
+success("Logging path is valid")
+
 try:
     engine = sqlalchemy.create_engine(config['database'])
     engine.connect()
 except Exception as e:
     error("Cannot connect to specified database. {0}".format(e))
-os.chdir(cwd)
 success("Database is available")
 
 try:
