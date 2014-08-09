@@ -1,3 +1,4 @@
+import random
 
 class HostUnreachableException(Exception):
     pass
@@ -8,19 +9,15 @@ class SSHiLoSensors:
         pass
     
     def server_status(self):
-        status = raw_input("Status [1/0]:")
-        return bool(status)
+        return random.random()>0.7
 
     def power_use(self):
-        power_use = raw_input("Power usage [present avg min max]: ")
-        psplit = power_use.split()
-        data = dict((k,psplit[i]) for (i,k) in enumerate(['present', 'avg', 'min', 'max']))
-        return data
+        return {'present': 316, 'average': 315, 'minimum': 314, 'maximum': 330}
 
     def power_units(self):
         data = {}
         for component in ['Power Supply 1', 'Power Supply 2']:
-            state = bool(raw_input(component+" [1/0]: "))
+            state = random.random()>0.4
 
             data[component] = {
                 'operational': state,
@@ -32,7 +29,7 @@ class SSHiLoSensors:
     def temp_sensors(self):
         data = {}
 
-        for component in ['Ambient Zone']:
-            data[component] = int(raw_input(component+": "))
+        for component, mean in {'Ambient Zone': 18, 'Power Supply Zone': 40}.iteritems():
+            data[component] = int(random.gauss(mean, 2))
 
         return data
