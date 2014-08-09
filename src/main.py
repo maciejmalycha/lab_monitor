@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import atexit
 import logging, logging.handlers
 import sys
 import subprocess
@@ -92,11 +91,20 @@ if __name__ == '__main__':
     rfh.setFormatter(format)
     baselog.addHandler(rfh)
 
-    servers_dao = database.ServersDAO(config['database'])
-    sensors_dao = database.SensorsDAO(config['database'])
+    try:
+        servers_dao = database.ServersDAO(config['database'])
+        sensors_dao = database.SensorsDAO(config['database'])
+    except Exception:
+        baselog.exception("Cannot connect to the database")
+        sys.exit(1)
+
     labmaker = lambda: construct_lab.run(config['num_racks'], servers_dao, sensors_dao)
 
-    red = redis.StrictRedis(**config['redis'])
+    try:
+        red = redis.StrictRedis(**config['redis'])
+    except Exception:
+        baselog.exception("Cannot connect to the Redis server")
+        sys.exit(1)
 
     lm = LabMonitor()
     lm.sensors_dao = sensors_dao
@@ -104,7 +112,5 @@ if __name__ == '__main__':
     lm.set_labmaker(labmaker)
     lm.set_redis(red)
     lm.set_frontend(frontend.app)
-
-    atexit.register(lm.monitor_stop)
 
     lm.start(debug=True)
