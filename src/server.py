@@ -70,7 +70,7 @@ class ESXiHypervisor:
         return VMSL
 
 
-    def shutdown(self, timeout):
+    def shutdown(self, timeout=30):
         VMSL = self.status()
         VMidSL = VMSL.keys()
         AVMSL = []
@@ -102,7 +102,7 @@ class ESXiHypervisor:
         # self.ssh.exec_command("/sbin/shutdown.sh")
         # self.ssh.exec_command("/sbin/poweroff")
 
-    def force_shutdown(self, timeout):
+    def force_shutdown(self, timeout=30):
         VMSL = self.status()
         VMidSL = VMSL.keys()
         AVMSL = []
@@ -231,6 +231,15 @@ class Server:
         for sensor, reading in self.temperature.iteritems():
             self.sensors_dao.store_temperature(self.addr, sensor, reading)
 
+    def shutdown(self, timeout=None):
+        self.hypervisor.shutdown(timeout)
+
+    def force_shutdown(self, timeout=None):
+        self.hypervisor.force_shutdown(timeout)
+
+    def __repr__(self):
+        return "<Server {0}>".format(self.addr)
+
 
 class Rack:
     def __init__(self, rack_id):
@@ -261,7 +270,7 @@ class Rack:
             self.log.info("Getting status of %s", server.hypervisor.addr)
             self.log.info("%s", server.hypervisor.status())
 
-    def shutdown(self, timeout):
+    def shutdown(self, timeout=None):
         force_list = []
         for server in self.servers:
             self.log.info("Initialazing shutdown on %s", server.hypervisor.addr)
@@ -273,7 +282,7 @@ class Rack:
                 force_list.append(server.hypervisor)
         return force_list if force_list else None
 
-    def force_shutdown(self, timeout):
+    def force_shutdown(self, timeout=None):
         for server in self.servers:
             self.log.info("Initialazing shutdown on %s", server.hypervisor.addr)
             err = server.hypervisor.shutdown(timeout)
@@ -282,6 +291,9 @@ class Rack:
             else:
                 self.log.error("Something went wrong. Error occurred.\nInitialazing force_shutdown")
                 server.hypervisor.force_shutdown(timeout)
+
+    def __repr__(self):
+        return "<Rack #{0}>".format(self.id)
 
 
 class Laboratory:
@@ -308,12 +320,12 @@ class Laboratory:
             self.log.info("Getting status of rack %s", rack.id)
             rack.status()
 
-    def shutdown(self, timeout):
+    def shutdown(self, timeout=None):
         for rack in self.racks:
             self.log.info("Initialazing shutdown on rack: %s", rack.id)
             rack.shutdown(timeout)
 
-    def force_shutdown(self, timeout):
+    def force_shutdown(self, timeout=None):
         for rack in self.racks:
             self.log.info("Initialazing shutdown on rack: %s", rack.id)
             res = rack.shutdown(timeout)
@@ -321,5 +333,8 @@ class Laboratory:
                 for hyp in res:
                     self.log.info("Shutdown failed. Forcing shutdown of a hypervisor: %s", hyp.addr)
                     hyp.force_shutdown(timeout)
+
+    def __repr__(self):
+        return "<Laboratory>"
 
 

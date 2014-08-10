@@ -48,7 +48,8 @@ class MinuteWorker(object):
                     if self.threaded:
                         workers = []
                         for task, args in tasks:
-                            worker = threading.Thread(target=task, args=args)
+                            worker = ExceptionThread(target=task, args=args)
+                            worker.exception_handler = self.exception_handler
                             workers.append(worker)
                             worker.start()
                         for worker in workers:
@@ -94,3 +95,22 @@ class MinuteWorker(object):
             self.log.info("Already outside main loop")
 
         self.update_state("off")
+
+    def exception_handler(self, thread, e):
+        """Handles exceptions raised by threads"""
+        self.log.exception("Exception in thread %s", thread)
+
+
+class ExceptionThread(threading.Thread):
+    """Subclass of Thread that allows exception handling"""
+    def __init__(self, *args, **kwargs):
+        threading.Thread.__init__(self, *args, **kwargs)
+        self.exception_handler = None
+    def run(self):
+        try:
+            self._Thread__target(*self._Thread__args, **self._Thread__kwargs)
+        except Exception as e:
+            if callable(self.exception_handler):
+                self.exception_handler(self, e)
+            else:
+                raise

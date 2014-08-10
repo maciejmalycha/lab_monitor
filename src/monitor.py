@@ -51,6 +51,8 @@ if __name__ == '__main__':
     rfh.setFormatter(format)
     baselog.addHandler(rfh)
 
+    baselog.info("Starting monitor")
+
     def cleanup():
         baselog.info('Terminating')
         try:
@@ -63,6 +65,7 @@ if __name__ == '__main__':
     
     try:
         red = redis.StrictRedis(**config['redis'])
+        baselog.info("Connected to Redis")
     except Exception:
         baselog.exception("Cannot connect to the Redis server")
         sys.exit(1)
@@ -74,6 +77,7 @@ if __name__ == '__main__':
     if pid is not None:
         baselog.info("Waiting for process #%u to terminate", pid)
         procutils.kill_wait(pid)
+        baselog.info("OK")
 
 
     red.set('lab_monitor.monitor_pid', procutils.getpid())
@@ -91,6 +95,7 @@ if __name__ == '__main__':
     monitor_opts['temperature'] = config['temperature']
     try:
         monitor_opts['engine'] = notifications.Hangouts(**config['xmpp'])
+        baselog.info("Created a notification engine")
     except Exception:
         baselog.exception("Cannot connect to the XMPP server")
         sys.exit(1)

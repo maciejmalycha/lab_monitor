@@ -27,6 +27,8 @@ class SSHiLoSensors:
         self.host = host
         self.user = user
         self.password = password
+        self.sensors = []
+        self.power_supplies = []
 
         self.log = logging.getLogger('lab_monitor.sensors.SSHiLoSensors')
         self.log.info("Initializing")
@@ -82,7 +84,8 @@ class SSHiLoSensors:
             raise HostUnreachableException()
 
         output = stdout.read()
-        self.log.debug("Command successful, received %u bytes of output", len(output))
+        self.log.debug("Command successful, received %u bytes of output:", len(output))
+        self.log.debug("%s", output)
 
         time.sleep(0.01) # otherwise, if executed in a loop, the program throws paramiko.ssh_exception.SSHException: Unable to open channel
 
@@ -147,6 +150,7 @@ class SSHiLoSensors:
 
     def temp_sensors(self):
         """Returns current readings of all temperature sensors"""
+        self.log.info("Checking temperature")
         data = {}
 
         for component in self.sensors:
@@ -154,8 +158,9 @@ class SSHiLoSensors:
             try:
                 if response['CurrentReading'] != 'N/A':
                     data[response['ElementName']] = int(response['CurrentReading'])
+                else:
+                    self.log.debug("Reading for %s is N/A", component)
             except (KeyError, ValueError):
                 self.log.warning("Cannot parse data for %s", component)
-
 
         return data

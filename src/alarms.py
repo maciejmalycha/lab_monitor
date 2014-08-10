@@ -1,3 +1,4 @@
+import logging
 import datetime
 
 ## BASE ALARMS ##
@@ -18,20 +19,27 @@ class Alarm:
         self.notification_engine = engine
         self.delay = datetime.timedelta(seconds=delay)
 
+        self.log = logging.getLogger("lab_monitor.alarms.{0}".format(self.__class__.__name__))
+        master_info = ", as a child of {0}".format(repr(self.master)) if self.master is not None else ""
+        self.log.debug("Initializing for %s%s", repr(self.resource), master_info)
+
         self.active = False
         self.changed = datetime.datetime.now()
         self.kwargs = {}
         self.kwargs.update(kwargs)
         self.sent = True
+        self.on_sent = False # this is to prevent sending off messages if on message hasn't been sent
 
     def update(self, active, **kwargs):
         """Sets the alarm state to active or inactive;
         optional **kwargs will be formatted into the message"""
         self.kwargs.update(kwargs)
+        self.log.debug("New kwargs: %s", kwargs)
         if self.active != active:
             self.sent = False
             self.active = active
             self.changed = datetime.datetime.now()
+            self.log.info("Changed state to %s", "active" if self.active else "inactive")
             if self.master is not None:
                 self.master.check()
 
@@ -42,9 +50,24 @@ class Alarm:
         if self.master is not None and self.master.active == self.active:
             return
         if not self.sent and (now - self.changed) > self.delay:
+            if self.active:
+                self.on_sent = True
+            elif not self.on_sent:
+                # on alarm hasn't been sent, so there's no need to send off message now
+                return
+
             msg = self.on_message if self.active else self.off_message
-            self.notification_engine.send(msg.format(**self.kwargs))
-            self.sent = True
+            try:
+                message = msg.format(**self.kwargs)
+            except Exception: # sh*t happens
+                message = "{0} {1}".format(msg, kwargs)
+            try:
+                self.notification_engine.send(message)
+                self.sent = True
+                self.log.info("Message sent successfully: %s", message)
+            except Exception:
+                self.log.exception("Failed to send a message: %s", message)
+
 
     def check(self):
         """Default behaviour for a master alarm is to update its state basing
@@ -59,6 +82,9 @@ class Alarm:
     def register(self, child):
         self.children.append(child)
 
+    def __repr__(self):
+        return "<alarms.{0} for {1}>".format(self.__class__, self.resource)
+
 
 class ShutdownAlarm(Alarm):
     """Use this class as a mixin to add method for shutting down resource
@@ -72,12 +98,18 @@ class ShutdownAlarm(Alarm):
 
     def shutdown(self):
         now = datetime.datetime.now()
-        if self.active and (now - self.changed) > datetime.timedelta(minutes=self.kwargs['number']):
-            if self.hypervisor is not None:
+        if self.active:
+            shutdown_time = self.changed + datetime.timedelta(minutes=self.kwargs['number'])
+            if now >= shutdown_time:
+                self.log.warning("Shutting down %s now", repr(self.resource))
                 self.notification_engine.send(self.shutdown_message.format(**self.kwargs))
-                self.resource.hypervisor.force_shutdown()
+                try:
+                    self.resource.force_shutdown()
+                except Exception:
+                    self.log.exception("Failed to shutdown %s", repr(self.resource))
             else:
-                self.notification_engine.send("Hypervisor for {resource} not available".format(self.resource))
+                secs = (shutdown_time - now).seconds
+                self.log.warning("Shutting down %s in %u seconds", repr(self.resource), secs)
 
 
 ## SERVER ALARMS ##
