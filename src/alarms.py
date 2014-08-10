@@ -17,7 +17,7 @@ class Alarm:
         self.resource = resource
         self.resource.register_alarm(self)
         self.notification_engine = engine
-        self.delay = datetime.timedelta(seconds=delay)
+        self.delay = datetime.timedelta(minutes=delay)
 
         self.log = logging.getLogger("lab_monitor.alarms.{0}".format(self.__class__.__name__))
         master_info = ", as a child of {0}".format(repr(self.master)) if self.master is not None else ""
@@ -77,6 +77,7 @@ class Alarm:
         if self.children:
             total = len(self.children)
             count = len(filter(lambda x: x.active, self.children))
+            self.log.info("%u out of %u children are on", count, total)
             self.update(2 * count > total)
 
     def register(self, child):
@@ -99,6 +100,9 @@ class ShutdownAlarm(Alarm):
     def shutdown(self):
         now = datetime.datetime.now()
         if self.active:
+            if self.master is not None and self.master.active:
+                return # master will handle it
+
             shutdown_time = self.changed + datetime.timedelta(minutes=self.kwargs['number'])
             if now >= shutdown_time:
                 self.log.warning("Shutting down %s now", repr(self.resource))
@@ -107,6 +111,9 @@ class ShutdownAlarm(Alarm):
                     self.resource.force_shutdown()
                 except Exception:
                     self.log.exception("Failed to shutdown %s", repr(self.resource))
+                    self.notification_engine.send("Failed to shutdown {0}".format(repr(self.resource)))
+                    return
+                self.notification_engine.send("Shutdown of {0} completed".format(repr(self.resource)))
             else:
                 secs = (shutdown_time - now).seconds
                 self.log.warning("Shutting down %s in %u seconds", repr(self.resource), secs)

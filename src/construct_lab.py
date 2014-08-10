@@ -30,9 +30,9 @@ def create_alarms(lab, engine, delay, temperature, shutdown_timeout):
     lab_temp = alarms.LabTemperatureAlarm(None, lab, engine, delay, number=shutdown_timeout)
 
     for rack in lab.racks:
-        rack_ups = alarms.UPSRackPowerAlarm(lab_ups, lab, engine, delay, rack=rack.id+1)
-        rack_grid = alarms.GridRackPowerAlarm(lab_grid, lab, engine, delay, rack=rack.id+1)
-        rack_temp = alarms.RackTemperatureAlarm(lab_temp, lab, engine, delay, rack=rack.id+1, number=shutdown_timeout)
+        rack_ups = alarms.UPSRackPowerAlarm(lab_ups, rack, engine, delay, rack=rack.id+1)
+        rack_grid = alarms.GridRackPowerAlarm(lab_grid, rack, engine, delay, rack=rack.id+1)
+        rack_temp = alarms.RackTemperatureAlarm(lab_temp, rack, engine, delay, rack=rack.id+1, number=shutdown_timeout)
 
         for serv in rack.servers:
             serv_conn = alarms.ConnectionAlarm(None, serv, engine, delay, server=serv.addr, threshold=5)
@@ -44,4 +44,4 @@ def create_alarms(lab, engine, delay, temperature, shutdown_timeout):
                 warning = s['warning']
                 critical = s['critical']
                 temp = alarms.TemperatureAlarm(None, serv, engine, delay, server=serv.addr, sensor=sensor, threshold=warning)
-                shutd = alarms.TemperatureAlarm(rack_temp, serv, engine, delay, server=serv.addr, sensor=sensor, threshold=critical, number=shutdown_timeout)
+                shutd = alarms.TemperatureShutdownAlarm(rack_temp, serv, engine, delay, server=serv.addr, sensor=sensor, threshold=critical, number=shutdown_timeout)

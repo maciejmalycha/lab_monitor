@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning) # xmpppy raises them
+
 import xmpp
 
 class Hangouts:
