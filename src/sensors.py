@@ -1,6 +1,7 @@
 import logging
 import re
 import time
+import string
 
 import paramiko
 
@@ -98,6 +99,14 @@ class SSHiLoSensors:
             raise HostUnreachableException()
 
         output = stdout.read()
+
+        try:
+            output = output.decode('utf-8')
+        except UnicodeDecodeError:
+            self.log.warning("Unicode error")
+
+        output = ''.join(ch if ch in string.printable else "\\0x%02X"%ord(ch) for ch in output)
+
         self.log.debug("Command successful, received %u bytes of output:", len(output))
         self.log.debug("%s", output)
 
@@ -115,11 +124,11 @@ class SSHiLoSensors:
         """Checks server status"""
         self.log.info("Checking status")
 
-        response = self.show("/system1")
+        response, original = self.show("/system1", original=True)
         try:
             enabled = response['enabledstate']=="enabled"
         except KeyError:
-            self.log.warning("Cannot find 'enabledstate' in response from %s, returning False", self.host)
+            self.log.warning("Cannot find 'enabledstate' in response from %s, returning False. Original output:\n%s", self.host, original)
             return False
 
         if enabled and self.redetect:
@@ -131,7 +140,7 @@ class SSHiLoSensors:
         """Returns power usage"""
         self.log.info("Checking power usage")
 
-        response = self.show("/system1")
+        response, original = self.show("/system1", original=True)
 
         data = {}
         ilo_keys = [
@@ -143,8 +152,10 @@ class SSHiLoSensors:
         for key, ilo_key in ilo_keys:
             try:
                 data[key] = int(response[ilo_key].split()[0])
-            except (KeyError, ValueError):
-                self.log.warning("Cannot parse data for %s", ilo_key)
+            except KeyError:
+                self.log.warning("Power usage row %s not found at %s. Original output:\n%s", ilo_key, self.host, original)
+            except (IndexError, ValueError):
+                self.log.warning("Cannot parse data for %s at %s (%s)", ilo_key, self.host, response[ilo_key])
                 data[key] = None
 
         return data
@@ -156,14 +167,14 @@ class SSHiLoSensors:
         data = {}
 
         for component in self.power_supplies:
-            response = self.show(component)
+            response, original = self.show(component, original=True)
             try:
                 data[response['ElementName']] = {
                     'operational': response.get('OperationalStatus')=='Ok',
                     'health': response.get('HealthState')=='Ok'
                 }
             except KeyError:
-                self.log.warning("Cannot parse data for %s", component)
+                self.log.warning("Cannot parse data for %s at %s. Original output:\n%s", component, self.host, original)
 
         return data
 
@@ -173,13 +184,15 @@ class SSHiLoSensors:
         data = {}
 
         for component in self.sensors:
-            response = self.show(component)
+            response, original = self.show(component, original=True)
             try:
                 if response['CurrentReading'] != 'N/A':
                     data[response['ElementName']] = int(response['CurrentReading'])
                 else:
                     self.log.debug("Reading for %s is N/A", component)
-            except (KeyError, ValueError):
-                self.log.warning("Cannot parse data for %s", component)
+            except KeyError:
+                self.log.warning("Cannot parse data for %s at %s. Original output:\n", component, self.host, original)
+            except ValueError:
+                self.log.warning("Cannot parse data for %s at %s (%s)", component, self.host, response['CurrentReading'])
 
         return data
