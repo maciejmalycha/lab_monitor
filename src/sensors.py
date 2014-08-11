@@ -154,6 +154,7 @@ class SSHiLoSensors:
                 data[key] = int(response[ilo_key].split()[0])
             except KeyError:
                 self.log.warning("Power usage row %s not found at %s. Original output:\n%s", ilo_key, self.host, original)
+                data[key] = None
             except (IndexError, ValueError):
                 self.log.warning("Cannot parse data for %s at %s (%s)", ilo_key, self.host, response[ilo_key])
                 data[key] = None
