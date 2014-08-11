@@ -226,12 +226,12 @@ class Server:
     def store_status(self):
         self.sensors_dao.store_server_status(self.addr, self.server_status)
 
+        for unit, state in self.power_units.iteritems():
+            self.sensors_dao.store_power_unit(self.addr, unit, **state)
+
         if self.server_status:
             # if server is down, you won't find anything interesting here
             self.sensors_dao.store_power_usage(self.addr, **self.power_usage)
-
-            for unit, state in self.power_units.iteritems():
-                self.sensors_dao.store_power_unit(self.addr, unit, **state)
 
             for sensor, reading in self.temperature.iteritems():
                 self.sensors_dao.store_temperature(self.addr, sensor, reading)
