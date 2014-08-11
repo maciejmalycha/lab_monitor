@@ -45,7 +45,7 @@ class SSHiLoSensors:
         try:
             self.ssh.connect(self.host, username=self.user, password=self.password)
             return True
-        except IOError as e:
+        except (IOError, paramiko.SSHException) as e:
             self.log.exception("Cannot connect to %s", self.host)
 
     def disconnect(self):
