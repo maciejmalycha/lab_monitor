@@ -39,7 +39,7 @@ class Alarm:
             self.sent = False
             self.active = active
             self.changed = datetime.datetime.now()
-            self.log.info("Changed state to %s", "active" if self.active else "inactive")
+            self.log.info("Changed state to %s for %s", "active" if self.active else "inactive", repr(self.resource))
             if self.master is not None:
                 self.master.check()
 
