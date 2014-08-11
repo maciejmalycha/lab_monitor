@@ -173,19 +173,44 @@ function drawChart(url, area, params){
 
         if(typeof $(area).highcharts()=='undefined')
         {
-            // drawing for the first time
-            $(area).highcharts('StockChart', {
-                navigator : {
+            // enable range selector only if data range is at least 24 hours
+            if(r.bounds[1]-r.bounds[0]>=1000*60*60*24)
+            {
+                navigator_opts = {
                     adaptToUpdatedData: false,
                     series: {'name':'Navigator', 'data':[
                         [r.bounds[0], null],
                         [r.bounds[1], null],
                     ]}
-                    /*xAxis: {
-                        min: r.bounds[0],
-                        max: r.bounds[1]
-                    }*/
-                },
+                }
+                x_axis_events = {
+                    afterSetExtremes: function(e) {
+                        var axis = $(area).highcharts().xAxis[0];
+                        // the user may be navigating over the available area
+                        if(e.min<axis.dataMin || e.max>axis.dataMax)
+                        {
+                            console.log('don\'t take it easy');
+                            // when the user is using a slider, this event is being called all the time
+                            // to avoid unnecessary requests, we'll wait 0.1 s before updating data
+                            clearTimeout($(area).data('update-timer'));
+                            $(area).data('update-timer', setTimeout(function(){
+                                console.log('reload');
+                                drawChart(url, area, {start:e.min, end:e.max});
+                            }, 100));
+                        }
+                    }
+                }
+            }
+            else
+            {
+                navigator_opts = {}
+                x_axis_events = {}
+            }
+
+
+            // drawing for the first time
+            $(area).highcharts('StockChart', {
+                navigator : navigator_opts,
                 rangeSelector : {
                     buttons: [{
                         type: 'hour',
@@ -215,24 +240,7 @@ function drawChart(url, area, params){
                 },
                 series: series_data,
                 xAxis: {
-                    minTickInterval: 60000,
-                    events: {
-                        afterSetExtremes: function(e) {
-                            var axis = $(area).highcharts().xAxis[0];
-                            // the user may be navigating over the available area
-                            if(e.min<axis.dataMin || e.max>axis.dataMax)
-                            {
-                                console.log('don\'t take it easy');
-                                // when the user is using a slider, this event is being called all the time
-                                // to avoid unnecessary requests, we'll wait 0.1 s before updating data
-                                clearTimeout($(area).data('update-timer'));
-                                $(area).data('update-timer', setTimeout(function(){
-                                    console.log('reload');
-                                    drawChart(url, area, {start:e.min, end:e.max});
-                                }, 100));
-                            }
-                        }
-                    }
+                    events: x_axis_events
                 }
             });
         }
