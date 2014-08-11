@@ -17,7 +17,7 @@ class ILoSSHClient(paramiko.SSHClient):
         raise paramiko.ssh_exception.SSHException("No authentication methods available")
 
 
-class HostUnreachableException(Exception):
+class HostUnreachableException(IOError):
     pass
 
 
@@ -29,6 +29,7 @@ class SSHiLoSensors:
         self.password = password
         self.sensors = []
         self.power_supplies = []
+        self.redetect = True
 
         self.log = logging.getLogger('lab_monitor.sensors.SSHiLoSensors')
         self.log.info("Initializing")
@@ -36,12 +37,15 @@ class SSHiLoSensors:
         self.ssh = ILoSSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.connect()
-        self.detect_components()
 
     def connect(self):
         """Establishes connection with the iLo server"""
         self.log.info("Connecting to the iLo server at %s", self.host)
-        self.ssh.connect(self.host, username=self.user, password=self.password)
+        try:
+            self.ssh.connect(self.host, username=self.user, password=self.password)
+            return True
+        except IOError as e:
+            self.log.exception("Cannot connect to %s", self.host)
 
     def disconnect(self):
         """Disconnects from the iLo server"""
@@ -51,12 +55,19 @@ class SSHiLoSensors:
     def detect_components(self):
         """Loads all the power supplies and temperature sensors that will be monitored"""
         self.log.info("Detecting components")
-        system = self.show("/system1", False)
+
+        try:
+            system = self.show("/system1", False)
+        except IOError as e:
+            self.sensors = []
+            self.power_supplies = []
+            self.redetect = True
 
         # I use list(set(...)) to remove duplicates, because they are there in the output
         self.sensors = list(set("/system1/{0}".format(a) for a in re.findall("    (sensor\d)", system)))
         self.power_supplies = list(set("/system1/{0}".format(a) for a in re.findall("    (powersupply\d)", system)))
 
+        self.redetect = False
         self.log.info("Found %u temperature sensors and %u power supplies", len(self.sensors), len(self.power_supplies))
 
     def show(self, component, autoparse=True, original=False):
@@ -77,6 +88,9 @@ class SSHiLoSensors:
             except paramiko.SSHException as e:
                 self.log.warning("Command failed (%s), reconnecting", e)
                 self.disconnect()
+                self.connect()
+            except AttributeError as e:
+                # not even connected
                 self.connect()
 
         if not success:
@@ -103,10 +117,15 @@ class SSHiLoSensors:
 
         response = self.show("/system1")
         try:
-            return response['enabledstate']=="enabled"
+            enabled = response['enabledstate']=="enabled"
         except KeyError:
-            self.log.warning("Cannot find 'enabledstate', returning False")
+            self.log.warning("Cannot find 'enabledstate' in response from %s, returning False", self.host)
             return False
+
+        if enabled and self.redetect:
+            self.detect_components()
+
+        return enabled
 
     def power_use(self):
         """Returns power usage"""

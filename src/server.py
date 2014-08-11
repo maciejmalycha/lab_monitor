@@ -190,9 +190,12 @@ class Server:
         self.record = record
         self.rack = None
         self.server_status = None
-        self.power_units = {'Power Supply 1': None, 'Power Supply 2': None}
+        self.power_units = {
+            'Power Supply 1': {'health': None, 'operational': None},
+            'Power Supply 2': {'health': None, 'operational': None}
+        }
         self.power_usage = {'present': None, 'average': None, 'minimum': None, 'maximum': None}
-        self.last_reading = datetime.datetime.now()
+        self.last_reading = datetime.datetime.fromtimestamp(0)
         self.temperature = {}
 
     def register_alarm(self, alarm):
@@ -223,13 +226,15 @@ class Server:
     def store_status(self):
         self.sensors_dao.store_server_status(self.addr, self.server_status)
 
-        self.sensors_dao.store_power_usage(self.addr, **self.power_usage)
+        if self.server_status:
+            # if server is down, you won't find anything interesting here
+            self.sensors_dao.store_power_usage(self.addr, **self.power_usage)
 
-        for unit, state in self.power_units.iteritems():
-            self.sensors_dao.store_power_unit(self.addr, unit, **state)
+            for unit, state in self.power_units.iteritems():
+                self.sensors_dao.store_power_unit(self.addr, unit, **state)
 
-        for sensor, reading in self.temperature.iteritems():
-            self.sensors_dao.store_temperature(self.addr, sensor, reading)
+            for sensor, reading in self.temperature.iteritems():
+                self.sensors_dao.store_temperature(self.addr, sensor, reading)
 
     def shutdown(self, timeout=None):
         self.hypervisor.shutdown(timeout)

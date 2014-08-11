@@ -137,6 +137,9 @@ class UPSServerPowerAlarm(Alarm):
     off_message = "Power restored in server {server}"
 
     def check(self):
+        if not self.resource.server_status:
+            return
+
         self.update(self.resource.power_units['Power Supply 1']['health'] 
                      and self.resource.power_units['Power Supply 1']['operational'])
 
@@ -147,6 +150,9 @@ class GridServerPowerAlarm(Alarm):
     off_message = "Power restored in server {server}"
 
     def check(self):
+        if not self.resource.server_status:
+            return
+
         self.update(self.resource.power_units['Power Supply 2']['health'] 
                      and self.resource.power_units['Power Supply 2']['operational'])
 
@@ -157,6 +163,9 @@ class TemperatureAlarm(Alarm):
     off_message = "Temperature of {server} at {sensor} dropped to {reading} C"
 
     def check(self):
+        if not self.resource.server_status:
+            return
+
         self.kwargs['reading'] = self.resource.temperature[self.kwargs['sensor']]
         self.update(self.kwargs['reading'] > self.kwargs['threshold'])
 
