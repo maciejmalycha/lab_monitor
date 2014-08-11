@@ -131,24 +131,26 @@ class Temperature(Base):
 
 
 class DAO:
-    DB = 'sqlite:///../lab_monitor.sqlite'
+    DBENGINE = None
 
-    def __init__(self, engine=None):
+    def __init__(self, db, engine=None):
         """Initializes a Data Access Object, utilizing an existing engine if available (otherwise it creates one)"""
         self.log = logging.getLogger("lab_monitor.database.{0}".format(self.__class__.__name__))
         self.log.info("Initializing")
 
-        try:
-            global DBENGINE
-            DBENGINE
-            self.log.info("Global engine is available")
-        except NameError:
-            self.log.info("Global engine not found, creating one")
-            DBENGINE = create_engine(self.DB)
-            Base.metadata.create_all(DBENGINE)
-            Session.configure(bind=DBENGINE)
+        if engine is None:
+            if DAO.DBENGINE is not None:
+                self.log.info("Global engine is available")
+            else:
+                self.log.info("Global engine not found, creating one")
+                DAO.DBENGINE = create_engine(db)
+                Base.metadata.create_all(DAO.DBENGINE)
+                Session.configure(bind=DAO.DBENGINE)
 
-        self.engine = DBENGINE
+            self.engine = DAO.DBENGINE
+        else:
+            self.engine = engine
+
 
 
 class ServersDAO(DAO):
@@ -180,7 +182,7 @@ class ServersDAO(DAO):
 
                         row['power_supplies'] = [unit.health and unit.operational for unit in power_units]
                         row['temperature'] = u"{0}\u00b0".format(temperature.reading)
-                    except AttributeError:
+                    except Exception:
                         row['power_supplies'] = []
                         row['temperature'] = '?'
 
@@ -383,7 +385,7 @@ class SensorsDAO(DAO):
 
             q = session.query(PowerUnits).filter(PowerUnits.server==server, between(PowerUnits.timestamp, start, end)).order_by(PowerUnits.timestamp)
             for row in q:
-                data[row.power_supply].append([self.tojstime(row.timestamp), int(row.operational=='Ok' and row.health=='Ok')])
+                data[row.power_supply].append([self.tojstime(row.timestamp), int(row.operational and row.health)])
 
             return data
 
@@ -440,7 +442,7 @@ class SensorsDAO(DAO):
             data = {}
 
             try:
-                data['power_units'] = "ok" if reduce(lambda a,b: a and b, (unit.health=='Ok' and unit.operational=='Ok' for unit in power_units)) else "alert"
+                data['power_units'] = "ok" if reduce(lambda a,b: a and b, (unit.health and unit.operational for unit in power_units)) else "alert"
             except:
                 data['power_units'] = '?'
 

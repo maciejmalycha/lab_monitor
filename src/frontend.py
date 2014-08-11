@@ -1,57 +1,39 @@
-#!/usr/bin/env python
-
-import logging, logging.handlers
 import datetime
 
 from flask import *
-import gevent
-from gevent.wsgi import WSGIServer
 
-from sse import EventStream
-from database import *
-from sensors import SSHiLoSensors
-from controller import ILoController
-from server import *
+from database import ServerStatus, PowerUsage, PowerUnits, Temperature
 
-# configure logging
-baselog = logging.getLogger('lab_monitor')
-baselog.setLevel(logging.INFO)
+"""
+Before running the frontend, set the following attributes:
 
-format = logging.Formatter("%(asctime)s  %(levelname)-8s %(name)-36s %(message)s", "%H:%M:%S")
+- app.servers_dao - ServersDAO
+- app.sensors_dao - SensorsDAO
+- app.monitor_start - callable (async)
+- app.monitor_stop - callable (async)
+- app.monitor_restart - callable (async)
+- app.monitor_status - callable
+- app.servers_changed - callable
+- app.lab - Laboratory
+- app.stream - EventStream
+"""
 
-ch = logging.StreamHandler()
-ch.setLevel(logging.WARNING)
-ch.setFormatter(format)
-baselog.addHandler(ch)
-
-rfh = logging.handlers.TimedRotatingFileHandler('../logs/lab_monitor', 'midnight')
-rfh.setLevel(logging.INFO)
-rfh.setFormatter(format)
-baselog.addHandler(rfh)
-
-
-# set up Flask and some globals
 app = Flask(__name__)
 #app.debug = True
 app.jinja_env.filters['unsafejson'] = lambda v: json.dumps(v) # encode to JSON and escape special chars
-controller_inst = None # ILoController instance
-controller_gevent = None # Greenlet that started the ILoController 
-shutdown_timeout = 10
 
-stream = EventStream()
-
-# connect to the database
-servers_dao, sensors_dao = ServersDAO(), SensorsDAO()
+@app.context_processor
+def inject_variables():
+    return {'lab': app.lab, 'len': len}
 
 @app.route('/')
 def dashboard():
-    servers = servers_dao.server_list()
-    return render_template('dashboard.html', servers=servers)
+    return render_template('dashboard.html')
 
 @app.route('/status')
 def status0():
     try:
-        server = servers_dao.server_list()[0]['addr']
+        server = servers = app.lab.servers.keys()[0]['addr']
         return redirect(url_for('status', server=server))
     except IndexError:
         # no servers defined
@@ -63,23 +45,19 @@ def status(server):
 
 @app.route('/status/<server>/temperature')
 def status_temperature(server):
-    servers = servers_dao.server_list()
-    return render_template('status.html', servers=servers, server=server, data_src='json_temperature')
+    return render_template('status.html', server=server, data_src='json_temperature')
 
 @app.route('/status/<server>/power_usage')
 def status_power_usage(server):
-    servers = servers_dao.server_list()
-    return render_template('status.html', servers=servers, server=server, data_src='json_power_usage')
+    return render_template('status.html', server=server, data_src='json_power_usage')
 
 @app.route('/status/<server>/status')
 def status_status(server):
-    servers = servers_dao.server_list()
-    return render_template('status.html', servers=servers, server=server, data_src='json_status')
+    return render_template('status.html', server=server, data_src='json_status')
 
 @app.route('/status/<server>/power_units')
 def status_power_units(server):
-    servers = servers_dao.server_list()
-    return render_template('status.html', servers=servers, server=server, data_src='json_power_units')
+    return render_template('status.html', server=server, data_src='json_power_units')
 
 @app.route('/config')
 def config():
@@ -87,8 +65,7 @@ def config():
 
 @app.route('/config/servers')
 def config_servers():
-    servers = servers_dao.server_list()
-    return render_template('config_servers.html', servers=servers)
+    return render_template('config_servers.html')
 
 @app.route('/config/servers/create', methods=['POST'])
 def config_servers_create():
@@ -100,28 +77,28 @@ def config_servers_create():
         position = int(request.form['position'])
 
         # are numbers OK?
-        if rack not in xrange(7):
+        if rack not in xrange(len(app.lab.racks)):
             raise ValueError("Rack number must be between 0 and 6")
-        if size not in xrange(1,6):
+        if size not in xrange(1, 6):
             raise ValueError("Size must be between 1 and 5")
-        if position not in xrange(1,43):
+        if position not in xrange(1, 43):
             raise ValueError("Position must be between 1 and 42")
 
         # is anyone trying to put a 3U server on the 42nd position?
-        if position+size>43:
+        if position + size > 43:
             raise ValueError("Server does not fit")
 
         # are there any other servers on this place?
-        if servers_dao.server_position(rack, position, position+size-1):
+        if app.servers_dao.server_position(rack, position, position+size-1):
             raise ValueError("There is a server on this place")
 
         # is this host reachable?
         # (it takes the most time, so it's better to check other conditions first)
-        sensor = SSHiLoSensors(addr)
-        sensor.disconnect()
+        #sensor = SSHiLoSensors(addr)
+        #sensor.disconnect()
 
-        servers_dao.server_create(addr, type_, rack, size, position)
-        controller_restart()
+        app.servers_dao.server_create(addr, type_, rack, size, position)
+        app.servers_changed()
         return redirect(url_for('config_servers'))
 
     except Exception as e:
@@ -137,24 +114,24 @@ def config_servers_update():
         position = int(request.form['position'])
 
         # are numbers OK?
-        if rack not in xrange(7):
+        if rack not in xrange(len(app.lab.racks)):
             raise ValueError("Rack number must be between 0 and 6")
-        if size not in xrange(1,6):
+        if size not in xrange(1, 6):
             raise ValueError("Size must be between 1 and 5")
-        if position not in xrange(1,43):
+        if position not in xrange(1, 43):
             raise ValueError("Position must be between 1 and 42")
 
         # is anyone trying to put a 3U server on the 42nd position?
-        if position+size>43:
+        if position + size > 43:
             raise ValueError("Server does not fit")
 
         # are there any other servers on this place?
-        if servers_dao.server_position(rack, position, position+size-1, addr):
+        if app.servers_dao.server_position(rack, position, position+size-1, addr):
             raise ValueError("There is a server on this place")
 
 
-        servers_dao.server_update(addr=addr, update={'type_':type_, 'rack':rack, 'size':size, 'position':position})
-        controller_restart()
+        app.servers_dao.server_update(addr=addr, update={'type_':type_, 'rack':rack, 'size':size, 'position':position})
+        app.servers_changed()
         return redirect(url_for('config_servers'))
 
     except Exception as e:
@@ -163,8 +140,8 @@ def config_servers_update():
 @app.route('/config/servers/delete/<server>')
 def config_servers_delete(server):
     try:
-        servers_dao.server_delete(addr=server)
-        controller_restart()
+        app.servers_dao.server_delete(addr=server)
+        app.servers_changed()
         return redirect(url_for('config_servers'))
 
     except Exception as e:
@@ -173,8 +150,8 @@ def config_servers_delete(server):
 
 @app.route('/config/esxi')
 def config_hypervisors():
-    servers = servers_dao.server_list()
-    hypervisors = servers_dao.hypervisor_list()
+    servers = app.servers_dao.server_list()
+    hypervisors = app.servers_dao.hypervisor_list()
     return render_template('config_esxi.html', servers=servers, hypervisors=hypervisors)
 
 @app.route('/config/esxi/create', methods=['POST'])
@@ -184,16 +161,15 @@ def config_hypervisors_create():
         type_ = request.form['type']
         server_id = request.form['server_id']
 
-        print "server_id=%s"%server_id
-
-        if servers_dao.server_has_hypervisor(server_id):
+        if app.servers_dao.server_has_hypervisor(server_id):
             raise ValueError("Selected iLo server already has a corresponding hypervisor")
 
         # is this host reachable?
         # (it takes the most time, so it's better to check other conditions first)
-        hyperv = ESXiHypervisor(addr)
+        #hyperv = ESXiHypervisor(addr)
 
-        servers_dao.hypervisor_create(addr, type_, server_id)
+        app.servers_dao.hypervisor_create(addr, type_, server_id)
+        app.servers_changed()
         return redirect(url_for('config_hypervisors'))
 
     except Exception as e:
@@ -206,10 +182,11 @@ def config_hypervisors_update():
         type_ = request.form['type']
         server_id = request.form['server_id']
 
-        if servers_dao.server_has_hypervisor(server_id, addr):
+        if app.servers_dao.server_has_hypervisor(server_id, addr):
             raise ValueError("Selected iLo server already has a different corresponding hypervisor")
 
-        servers_dao.hypervisor_update(addr=addr, update={'type_':type_, 'server_id':server_id})
+        app.servers_dao.hypervisor_update(addr=addr, update={'type_':type_, 'server_id':server_id})
+        app.servers_changed()
         return redirect(url_for('config_hypervisors'))
 
     except Exception as e:
@@ -218,8 +195,8 @@ def config_hypervisors_update():
 @app.route('/config/esxi/delete/<hypervisor>')
 def config_hypervisors_delete(hypervisor):
     try:
-        servers_dao.hypervisor_delete(addr=hypervisor)
-        controller_restart()
+        app.servers_dao.hypervisor_delete(addr=hypervisor)
+        app.servers_changed()
         return redirect(url_for('config_hypervisors'))
 
     except Exception as e:
@@ -228,127 +205,100 @@ def config_hypervisors_delete(hypervisor):
 
 @app.route('/esxi/rack/<int:rack_id>')
 def esxi(rack_id=0):
-    servers = servers_dao.server_list()
-    return render_template('esxi.html', servers=servers, rack_id=rack_id)
+    return render_template('esxi.html', rack_id=rack_id)
 
 # danger zone
 @app.route('/esxi/shutdown', methods=['POST'])
 def esxi_shutdown():
-    lab = Laboratory()
-    lab.shutdown(shutdown_timeout)
+    app.lab.shutdown(shutdown_timeout)
     return ' '
 
 @app.route('/esxi/force_shutdown', methods=['POST'])
 def esxi_force_shutdown():
-    lab = Laboratory()
-    lab.force_shutdown(shutdown_timeout)
+    app.lab.force.shutdown(shutdown_timeout)
     return ' '
 
 @app.route('/esxi/rack/<int:rack_id>/shutdown', methods=['POST'])
 def esxi_shutdown_rack(rack_id):
-    rack_inst = Rack(rack_id)
-    force = rack_inst.shutdown(shutdown_timeout)
+    try:
+        app.lab.racks[rack_id].shutdown(shutdown_timeout)
+    except LookupError:
+        return '-1'
     return ' '
 
 @app.route('/esxi/rack/<int:rack_id>/force_shutdown', methods=['POST'])
 def esxi_force_shutdown_rack(rack_id):
-    rack_inst = Rack(rack_id)
-    rack_inst.force_shutdown(shutdown_timeout)
+    try:
+        app.lab.racks[rack_id].force_shutdown(shutdown_timeout)
+    except LookupError:
+        return '-1'
     return ' '
 
 @app.route('/esxi/server/<server>/shutdown', methods=['POST'])
 def esxi_shutdown_server(server):
-    hyperv = ESXiHypervisor(server)
-    hyperv.shutdown(shutdown_timeout)
+    try:
+        app.lab.hypervisors[server].shutdown()
+    except LookupError:
+        return '-1'
     return ' '
 
 @app.route('/esxi/server/<server>/force_shutdown', methods=['POST'])
 def esxi_force_shutdown_server(server):
-    hyperv = ESXiHypervisor(server)
-    hyperv.force_shutdown(shutdown_timeout)
+    try:
+        app.lab.hypervisors[server].force_shutdown()
+    except LookupError:
+        return '-1'
     return ' '
 
 @app.route('/esxi/server/<server>/<int:vm>/shutdown', methods=['POST'])
 def esxi_shutdown_vm(server, vm):
-    hyperv = ESXiHypervisor(server)
-    hyperv.shutdown_vm(vm)
+    try:
+        app.lab.hypervisors[server].shutdown_vm(vm)
+    except LookupError:
+        return '-1'
     return ' '
 
 @app.route('/esxi/server/<server>/<int:vm>/force_shutdown', methods=['POST'])
 def esxi_force_shutdown_vm(server, vm):
-    hyperv = ESXiHypervisor(server)
-    hyperv.force_shutdown_vm(vm)
+    try:
+        app.lab.hypervisors[server].force_shutdown_vm(vm)
+    except LookupError:
+        return '-1'
     return ' '
 # /danger zone
 
-def cstart():
-    global controller_inst
-    global stream
-    global servers_dao, sensors_dao
-    controller_inst = ILoController()
-    controller_inst.state_stream = stream
-    controller_inst.servers_dao = servers_dao
-    controller_inst.sensors_dao = sensors_dao
-    controller_inst.start()
 
-def cstop():
-    global controller_gevent
-    global controller_inst
-    controller_inst.stop()
-    controller_gevent.join()
-    controller_inst = None
+@app.route("/monitor/stream")
+def monitor_stream():
+    return Response(app.stream.subscribe(), mimetype='text/event-stream')
 
-def crestart():
-    global controller_gevent
-    gevent.spawn(cstop).join()
-    controller_gevent = gevent.spawn(cstart)
+@app.route("/monitor/start")
+def monitor_start():
+    app.monitor_start()
+    return ' '
 
+@app.route("/monitor/stop")
+def monitor_stop():
+    app.monitor_stop()
+    return ' '
 
-@app.route("/controller/stream")
-def controller_stream():
-    return Response(stream.subscribe(), mimetype="text/event-stream")
+@app.route("/monitor/restart")
+def monitor_restart():
+    app.monitor_restart()
+    return ' '
 
-@app.route("/controller/start")
-def controller_start():
-    global controller_inst
-    global controller_gevent
-    if controller_inst is None or controller_inst.state=="off":
-        controller_gevent = gevent.spawn(cstart)
-        return "starting"
-    return "already running"
-
-@app.route("/controller/stop")
-def controller_stop():
-    global controller_inst
-    if controller_inst is not None and controller_inst.state!="stopping":
-        gevent.spawn(cstop)
-        return "stopping"
-    return "already stopped"
-
-@app.route("/controller/restart")
-def controller_restart():
-    global controller_inst
-    if controller_inst is not None and controller_inst.state not in ["starting...", "stopping"]:
-        gevent.spawn(crestart)
-        return "restarting"
-    return "not started"
-
-@app.route("/controller/status")
-def controller_status():
-    global controller_inst
-    if controller_inst is not None:
-        return controller_inst.state
-    else:
-        return "off"
+@app.route("/monitor/status")
+def monitor_status():
+    return app.monitor_status()
 
 @app.route('/json/servers')
 def json_servers():
-    servers = servers_dao.server_list(with_health=True)
+    servers = app.servers_dao.server_list(with_health=True)
     return jsonify(servers=servers)
 
 @app.route('/json/server/<server>')
 def json_general(server):
-    data = sensors_dao.get_general(server)
+    data = app.sensors_dao.get_general(server)
     return jsonify(**data)
 
 def rq_time_bounds():
@@ -370,54 +320,43 @@ def rq_time_bounds():
 @app.route('/json/server/<server>/temperature')
 def json_temperature(server):
     start, end = rq_time_bounds()
-    data = sensors_dao.get_temperature(server, start, end)
-    bounds = sensors_dao.get_time_bounds(Temperature, server)
+    data = app.sensors_dao.get_temperature(server, start, end)
+    bounds = app.sensors_dao.get_time_bounds(Temperature, server)
     return jsonify(data=data, bounds=bounds)
 
 @app.route('/json/server/<server>/power_usage')
 def json_power_usage(server):
     start, end = rq_time_bounds()
-    data = sensors_dao.get_power_usage(server, start, end)
-    bounds = sensors_dao.get_time_bounds(PowerUsage, server)
+    data = app.sensors_dao.get_power_usage(server, start, end)
+    bounds = app.sensors_dao.get_time_bounds(PowerUsage, server)
     return jsonify(data=data, bounds=bounds)
 
 @app.route('/json/server/<server>/power_units')
 def json_power_units(server):
     start, end = rq_time_bounds()
-    data = sensors_dao.get_power_units(server, start, end)
-    bounds = sensors_dao.get_time_bounds(PowerUnits, server)
+    data = app.sensors_dao.get_power_units(server, start, end)
+    bounds = app.sensors_dao.get_time_bounds(PowerUnits, server)
     return jsonify(data=data, bounds=bounds)
 
 @app.route('/json/server/<server>/status')
 def json_status(server):
     start, end = rq_time_bounds()
-    data = sensors_dao.get_status(server, start, end)
-    bounds = sensors_dao.get_time_bounds(ServerStatus, server)
+    data = app.sensors_dao.get_status(server, start, end)
+    bounds = app.sensors_dao.get_time_bounds(ServerStatus, server)
     return jsonify(data=data, bounds=bounds)
 
-@app.route('/json/esxi/rack/<rack_id>')
+@app.route('/json/esxi/rack/<int:rack_id>')
 def json_esxi_rack(rack_id):
-    rack_inst = Rack(rack_id)
-    hypervisors = rack_inst.get_hypervisors_ready()
+    rack = app.lab.racks[rack_id]
 
     vms = {}
-    for hv in hypervisors:
+    for server in rack.servers:
+        hv = server.hypervisor
+        if hv is None:
+            continue
         hv_vms = []
         for vm, status in hv.status().iteritems():
             hv_vms.append({'id':vm, 'status': status, 'tools': hv.check_vmwaretools(vm)})
 
         vms[hv.addr] = hv_vms
     return jsonify(**vms)
-
-
-if __name__ == "__main__":
-    wsgi_server = WSGIServer(("", 5000), app, log=None)
-    try:
-        wsgi_server.serve_forever()
-    except (KeyboardInterrupt, SystemExit):
-        if controller_inst is not None:
-            cstop()
-
-
-#if __name__ == '__main__':
-#    app.run(host='0.0.0.0')
