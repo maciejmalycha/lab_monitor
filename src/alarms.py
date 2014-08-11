@@ -109,6 +109,9 @@ class ShutdownAlarm(Alarm):
                 self.notification_engine.send(self.shutdown_message.format(**self.kwargs))
                 try:
                     self.resource.force_shutdown()
+                except AttributeError:
+                    self.log.warning("Hypervisor for %s is not configured. Cannot shutdown.", repr(self.resource))
+                    return
                 except Exception:
                     self.log.exception("Failed to shutdown %s", repr(self.resource))
                     self.notification_engine.send("Failed to shutdown {0}".format(repr(self.resource)))
