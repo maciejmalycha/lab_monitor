@@ -5,8 +5,7 @@ import datetime
 import paramiko
 
 import database
-import sensors
-from minuteworker import MinuteWorker
+import sensors as sensors_mod
 
 class ESXiHypervisor:
     #initialazing - connecting to the ESXi server
@@ -14,7 +13,6 @@ class ESXiHypervisor:
         self.addr = hostname
 
         self.log = logging.getLogger("lab_monitor.server.ESXiHypervisor")
-        self.log.setLevel(logging.INFO)
         self.log.info("Connecting...")
 
         self.ssh = paramiko.SSHClient()
@@ -72,7 +70,7 @@ class ESXiHypervisor:
         return VMSL
 
 
-    def shutdown(self, timeout):
+    def shutdown(self, timeout=30):
         VMSL = self.status()
         VMidSL = VMSL.keys()
         AVMSL = []
@@ -104,7 +102,7 @@ class ESXiHypervisor:
         # self.ssh.exec_command("/sbin/shutdown.sh")
         # self.ssh.exec_command("/sbin/poweroff")
 
-    def force_shutdown(self, timeout):
+    def force_shutdown(self, timeout=30):
         VMSL = self.status()
         VMidSL = VMSL.keys()
         AVMSL = []
@@ -183,44 +181,87 @@ class ESXiVirtualMachine:
 
 
 class Server:
-    def __init__(self, hypervisor, sensor, sensor_dao):
+    def __init__(self, addr, hypervisor, sensors, sensors_dao, record):
+        self.addr = addr
         self.alarms = []
         self.hypervisor = hypervisor
-        self.sensor = sensor
-        self.sensor_dao = sensor_dao
+        self.sensors = sensors
+        self.sensors_dao = sensors_dao
+        self.record = record
+        self.rack = None
         self.server_status = None
-        self.power_units = [None, None]
-        self.last_reading = None
+        self.power_units = {'Power Supply 1': None, 'Power Supply 2': None}
+        self.power_usage = {'present': None, 'average': None, 'minimum': None, 'maximum': None}
+        self.last_reading = datetime.datetime.now()
         self.temperature = {}
 
     def register_alarm(self, alarm):
         self.alarms.append(alarm)
 
-    def notify_alarms(self, alarm):
+    def notify_alarms(self):
         for alarm in self.alarms:
-            alarm.check(self)
+            alarm.check()
 
     def add_reading(self, name, value):
         #TODO: Add reading to readings dictionary
-        pass
+        self.temperature[name] = value # ?
 
+    def check_status(self):
+        try:
+            self.server_status = self.sensors.server_status()
+            self.power_usage = self.sensors.power_use()
+            self.power_units = self.sensors.power_units()
+            self.temperature = self.sensors.temp_sensors()
+
+        except sensors_mod.HostUnreachableException:
+            # it has already been logged
+            self.server_status = False
+
+        if self.server_status:
+            self.last_reading = datetime.datetime.now()
+
+    def store_status(self):
+        self.sensors_dao.store_server_status(self.addr, self.server_status)
+
+        self.sensors_dao.store_power_usage(self.addr, **self.power_usage)
+
+        for unit, state in self.power_units.iteritems():
+            self.sensors_dao.store_power_unit(self.addr, unit, **state)
+
+        for sensor, reading in self.temperature.iteritems():
+            self.sensors_dao.store_temperature(self.addr, sensor, reading)
+
+    def shutdown(self, timeout=None):
+        self.hypervisor.shutdown(timeout)
+
+    def force_shutdown(self, timeout=None):
+        self.hypervisor.force_shutdown(timeout)
+
+    def __repr__(self):
+        return "<Server {0}>".format(self.addr)
 
 
 class Rack:
-    def __init__(self, rackid):
-        self.id = rackid
+    def __init__(self, rack_id):
+        self.id = rack_id
         self.servers = []
+        self.alarms = []
+        self.lab = None
         self.log = logging.getLogger("lab_monitor.server.Rack")
-        self.log.setLevel(logging.INFO)
         self.log.info("Initialazing rack with id=%s", self.id)
+        
 
     def add_server(self, server):
+        server.rack = self
+
+        self.lab.servers[server.addr] = server
+        if server.hypervisor is not None:
+            self.lab.hypervisors[server.hypervisor.addr] = server.hypervisor
+
         self.servers.append(server)
 
-    def prepare_servers(self):
-        serv_list = database.ServersDAO().server_list(self.id)
-        for serv in serv_list:
-            self.add_server(Server(ESXiHypervisor(serv['hypervisor']), sensors.SSHiLoSensors(serv['addr']), database.SensorsDAO()))
+    def register_alarm(self, alarm):
+        self.alarms.append(alarm)
 
     def status(self):
         if not self.servers:
@@ -229,7 +270,7 @@ class Rack:
             self.log.info("Getting status of %s", server.hypervisor.addr)
             self.log.info("%s", server.hypervisor.status())
 
-    def shutdown(self, timeout):
+    def shutdown(self, timeout=None):
         force_list = []
         for server in self.servers:
             self.log.info("Initialazing shutdown on %s", server.hypervisor.addr)
@@ -241,7 +282,7 @@ class Rack:
                 force_list.append(server.hypervisor)
         return force_list if force_list else None
 
-    def force_shutdown(self, timeout):
+    def force_shutdown(self, timeout=None):
         for server in self.servers:
             self.log.info("Initialazing shutdown on %s", server.hypervisor.addr)
             err = server.hypervisor.shutdown(timeout)
@@ -251,41 +292,40 @@ class Rack:
                 self.log.error("Something went wrong. Error occurred.\nInitialazing force_shutdown")
                 server.hypervisor.force_shutdown(timeout)
 
+    def __repr__(self):
+        return "<Rack #{0}>".format(self.id)
+
 
 class Laboratory:
     def __init__(self):
         self.racks = []
         self.log = logging.getLogger("lab_monitor.server.Laboratory")
-        self.log.setLevel(logging.INFO)
         self.log.info("Initialazing lab")
 
+        self.alarms = []
+
+        self.servers = {}
+        self.hypervisors = {}
+
     def add_rack(self, rack):
+        rack.lab = self
+
         self.racks.append(rack)
 
-    def prepare_racks(self):
-        for rackid in range(0,6):
-            if database.ServersDAO().server_list(rackid):
-                self.add_rack(Rack(rackid))
-
-    def init_racks(self):
-        for rack in self.racks:
-            rack.prepare_servers()
-
-    def init_structure(self):
-        self.prepare_racks()
-        self.init_racks()
+    def register_alarm(self, alarm):
+        self.alarms.append(alarm)
 
     def status(self):
         for rack in self.racks:
             self.log.info("Getting status of rack %s", rack.id)
             rack.status()
 
-    def shutdown(self, timeout):
+    def shutdown(self, timeout=None):
         for rack in self.racks:
             self.log.info("Initialazing shutdown on rack: %s", rack.id)
             rack.shutdown(timeout)
 
-    def force_shutdown(self, timeout):
+    def force_shutdown(self, timeout=None):
         for rack in self.racks:
             self.log.info("Initialazing shutdown on rack: %s", rack.id)
             res = rack.shutdown(timeout)
@@ -293,5 +333,8 @@ class Laboratory:
                 for hyp in res:
                     self.log.info("Shutdown failed. Forcing shutdown of a hypervisor: %s", hyp.addr)
                     hyp.force_shutdown(timeout)
+
+    def __repr__(self):
+        return "<Laboratory>"
 
 

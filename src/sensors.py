@@ -1,16 +1,13 @@
 import logging
 import re
+import time
 
 import paramiko
-import gevent, gevent.monkey
 
 paramiko.Transport._preferred_ciphers = ( 'aes128-cbc', '3des-cbc' )
 paramiko.Transport._preferred_macs = ( 'hmac-md5', 'hmac-sha1' )
 paramiko.Transport._preferred_keys = ( 'ssh-rsa', 'ssh-dss' )
 paramiko.Transport._preferred_compression = ( 'none' )
-
-gevent.monkey.patch_all()
-
 
 class ILoSSHClient(paramiko.SSHClient):
     def _auth(self, username, password, *args, **kwargs):
@@ -30,6 +27,8 @@ class SSHiLoSensors:
         self.host = host
         self.user = user
         self.password = password
+        self.sensors = []
+        self.power_supplies = []
 
         self.log = logging.getLogger('lab_monitor.sensors.SSHiLoSensors')
         self.log.info("Initializing")
@@ -85,9 +84,10 @@ class SSHiLoSensors:
             raise HostUnreachableException()
 
         output = stdout.read()
-        self.log.debug("Command successful, received %u bytes of output", len(output))
+        self.log.debug("Command successful, received %u bytes of output:", len(output))
+        self.log.debug("%s", output)
 
-        gevent.sleep(0.01) # otherwise, if executed in a loop, the program throws paramiko.ssh_exception.SSHException: Unable to open channel
+        time.sleep(0.01) # otherwise, if executed in a loop, the program throws paramiko.ssh_exception.SSHException: Unable to open channel
 
         if autoparse:
             if original:
@@ -115,7 +115,13 @@ class SSHiLoSensors:
         response = self.show("/system1")
 
         data = {}
-        for key,ilo_key in [('present','oemhp_PresentPower'), ('avg','oemhp_AveragePower'), ('min','oemhp_MinPower'), ('max','oemhp_MaxPower')]:
+        ilo_keys = [
+            ('present', 'oemhp_PresentPower'),
+            ('average', 'oemhp_AveragePower'),
+            ('minimum', 'oemhp_MinPower'),
+            ('maximum', 'oemhp_MaxPower')
+        ]
+        for key, ilo_key in ilo_keys:
             try:
                 data[key] = int(response[ilo_key].split()[0])
             except (KeyError, ValueError):
@@ -144,6 +150,7 @@ class SSHiLoSensors:
 
     def temp_sensors(self):
         """Returns current readings of all temperature sensors"""
+        self.log.info("Checking temperature")
         data = {}
 
         for component in self.sensors:
@@ -151,8 +158,9 @@ class SSHiLoSensors:
             try:
                 if response['CurrentReading'] != 'N/A':
                     data[response['ElementName']] = int(response['CurrentReading'])
+                else:
+                    self.log.debug("Reading for %s is N/A", component)
             except (KeyError, ValueError):
                 self.log.warning("Cannot parse data for %s", component)
-
 
         return data

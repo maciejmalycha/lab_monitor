@@ -1,34 +1,26 @@
-import gevent, gevent.queue
 import json
 
 class EventStream:
     """This class allows pushing notifications to the browser via Server Sent Events"""
 
-    def __init__(self):
-        self.subscriptions = []
-
-    def write(self, msg):
-        """Pushes a message to all connected subscribers (if message is not a string, it will be JSON encoded)"""
-        if type(msg) is not str:
-            msg = json.dumps(msg)
-
-        try:
-            for sub in self.subscriptions[:]:
-                sub.put(msg)
-        except:
-            pass
+    def __init__(self, red, rkey):
+        self.red = red
+        self.rkey = rkey
 
     def encode(self, string):
         """Encodes string so that it can be sent as SSE"""
+        if type(string) is not str:
+            string = json.dumps(string) 
         return "\n".join(["data: {0}".format(line) for line in string.splitlines()])+"\n\n"
 
     def subscribe(self):
-        """Creates a new subscriber and yields messages whenever self.write is called somewhere else"""
-        q = gevent.queue.Queue()
-        self.subscriptions.append(q)
+        """Yields messages whenever pubsub receives them"""
+        pubsub = self.red.pubsub()
+        pubsub.subscribe(self.rkey)
         try:
-            while True:
-                result = q.get()
-                yield self.encode(result)
+            for message in pubsub.listen():
+                if message['type'] == 'message':
+                    yield self.encode(message['data'])
         except:
-            self.subscriptions.remove(q)
+            pubsub.unsubscribe()
+            raise StopIteration
