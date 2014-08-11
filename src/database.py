@@ -174,16 +174,33 @@ class ServersDAO(DAO):
 
                 if with_health:
                     try:
-                        power_units = session.query(PowerUnits).filter(PowerUnits.server==serv.addr).group_by(PowerUnits.power_supply).order_by(PowerUnits.power_supply)
+                        status = session.query(ServerStatus) \
+                            .filter(ServerStatus.server==serv.addr) \
+                            .order_by(desc(ServerStatus.timestamp)) \
+                            .first()
+
+                        row['status'] = status.status
+                    except Exception:
+                        row['status'] = False
+
+                    try:
+                        power_units = session.query(PowerUnits) \
+                            .filter(PowerUnits.server==serv.addr) \
+                            .group_by(PowerUnits.power_supply) \
+                            .order_by(PowerUnits.power_supply)
+
+                        row['power_supplies'] = [unit.health and unit.operational for unit in power_units]
+                    except Exception:
+                        row['power_supplies'] = []
+
+                    try:
                         temperature = session.query(Temperature) \
                             .filter(Temperature.server==serv.addr, Temperature.sensor=='Ambient Zone') \
                             .order_by(desc(Temperature.timestamp)) \
                             .first()
 
-                        row['power_supplies'] = [unit.health and unit.operational for unit in power_units]
                         row['temperature'] = u"{0}\u00b0".format(temperature.reading)
                     except Exception:
-                        row['power_supplies'] = []
                         row['temperature'] = '?'
 
                 data.append(row)

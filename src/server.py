@@ -227,6 +227,10 @@ class Server:
         self.sensors_dao.store_server_status(self.addr, self.server_status)
 
         for unit, state in self.power_units.iteritems():
+            if state['health'] is None and state['operational'] is None:
+                # SSHiLoSensors would return bool. If those values are None,
+                # it means data is not available, so we shouldn't store it
+                continue
             self.sensors_dao.store_power_unit(self.addr, unit, **state)
 
         if self.server_status:
