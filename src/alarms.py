@@ -109,6 +109,9 @@ class ShutdownAlarm(Alarm):
                 self.notification_engine.send(self.shutdown_message.format(**self.kwargs))
                 try:
                     self.resource.force_shutdown()
+                except AttributeError:
+                    self.log.warning("Hypervisor for %s is not configured. Cannot shutdown.", repr(self.resource))
+                    return
                 except Exception:
                     self.log.exception("Failed to shutdown %s", repr(self.resource))
                     self.notification_engine.send("Failed to shutdown {0}".format(repr(self.resource)))
@@ -137,6 +140,9 @@ class UPSServerPowerAlarm(Alarm):
     off_message = "Power restored in server {server}"
 
     def check(self):
+        if not self.resource.server_status:
+            return
+
         self.update(self.resource.power_units['Power Supply 1']['health'] 
                      and self.resource.power_units['Power Supply 1']['operational'])
 
@@ -147,6 +153,9 @@ class GridServerPowerAlarm(Alarm):
     off_message = "Power restored in server {server}"
 
     def check(self):
+        if not self.resource.server_status:
+            return
+
         self.update(self.resource.power_units['Power Supply 2']['health'] 
                      and self.resource.power_units['Power Supply 2']['operational'])
 
@@ -157,6 +166,9 @@ class TemperatureAlarm(Alarm):
     off_message = "Temperature of {server} at {sensor} dropped to {reading} C"
 
     def check(self):
+        if not self.resource.server_status:
+            return
+
         self.kwargs['reading'] = self.resource.temperature[self.kwargs['sensor']]
         self.update(self.kwargs['reading'] > self.kwargs['threshold'])
 

@@ -105,8 +105,11 @@ success("Database is available")
 
 try:
     red = redis.StrictRedis(**config['redis'])
-except Exception as e:
+    red.client_list()
+except redis.ConnectionError as e:
     error("Cannot connect to Redis server. {0}".format(e))
+except Exception as e:
+    error("Redis configuration is incorrect. {0}".format(e))
 success("Redis server is available")
 
 try:

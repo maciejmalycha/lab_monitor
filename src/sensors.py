@@ -1,6 +1,7 @@
 import logging
 import re
 import time
+import string
 
 import paramiko
 
@@ -17,7 +18,7 @@ class ILoSSHClient(paramiko.SSHClient):
         raise paramiko.ssh_exception.SSHException("No authentication methods available")
 
 
-class HostUnreachableException(Exception):
+class HostUnreachableException(IOError):
     pass
 
 
@@ -29,6 +30,7 @@ class SSHiLoSensors:
         self.password = password
         self.sensors = []
         self.power_supplies = []
+        self.redetect = True
 
         self.log = logging.getLogger('lab_monitor.sensors.SSHiLoSensors')
         self.log.info("Initializing")
@@ -36,12 +38,15 @@ class SSHiLoSensors:
         self.ssh = ILoSSHClient()
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.connect()
-        self.detect_components()
 
     def connect(self):
         """Establishes connection with the iLo server"""
         self.log.info("Connecting to the iLo server at %s", self.host)
-        self.ssh.connect(self.host, username=self.user, password=self.password)
+        try:
+            self.ssh.connect(self.host, username=self.user, password=self.password)
+            return True
+        except IOError as e:
+            self.log.exception("Cannot connect to %s", self.host)
 
     def disconnect(self):
         """Disconnects from the iLo server"""
@@ -51,12 +56,19 @@ class SSHiLoSensors:
     def detect_components(self):
         """Loads all the power supplies and temperature sensors that will be monitored"""
         self.log.info("Detecting components")
-        system = self.show("/system1", False)
+
+        try:
+            system = self.show("/system1", False)
+        except IOError as e:
+            self.sensors = []
+            self.power_supplies = []
+            self.redetect = True
 
         # I use list(set(...)) to remove duplicates, because they are there in the output
         self.sensors = list(set("/system1/{0}".format(a) for a in re.findall("    (sensor\d)", system)))
         self.power_supplies = list(set("/system1/{0}".format(a) for a in re.findall("    (powersupply\d)", system)))
 
+        self.redetect = False
         self.log.info("Found %u temperature sensors and %u power supplies", len(self.sensors), len(self.power_supplies))
 
     def show(self, component, autoparse=True, original=False):
@@ -78,12 +90,23 @@ class SSHiLoSensors:
                 self.log.warning("Command failed (%s), reconnecting", e)
                 self.disconnect()
                 self.connect()
+            except AttributeError as e:
+                # not even connected
+                self.connect()
 
         if not success:
             self.log.error("Reconnection failed 3 times")
             raise HostUnreachableException()
 
         output = stdout.read()
+
+        try:
+            output = output.decode('utf-8')
+        except UnicodeDecodeError:
+            self.log.warning("Unicode error")
+
+        output = ''.join(ch if ch in string.printable else "\\0x%02X"%ord(ch) for ch in output)
+
         self.log.debug("Command successful, received %u bytes of output:", len(output))
         self.log.debug("%s", output)
 
@@ -101,18 +124,23 @@ class SSHiLoSensors:
         """Checks server status"""
         self.log.info("Checking status")
 
-        response = self.show("/system1")
+        response, original = self.show("/system1", original=True)
         try:
-            return response['enabledstate']=="enabled"
+            enabled = response['enabledstate']=="enabled"
         except KeyError:
-            self.log.warning("Cannot find 'enabledstate', returning False")
+            self.log.warning("Cannot find 'enabledstate' in response from %s, returning False. Original output:\n%s", self.host, original)
             return False
+
+        if enabled and self.redetect:
+            self.detect_components()
+
+        return enabled
 
     def power_use(self):
         """Returns power usage"""
         self.log.info("Checking power usage")
 
-        response = self.show("/system1")
+        response, original = self.show("/system1", original=True)
 
         data = {}
         ilo_keys = [
@@ -124,8 +152,10 @@ class SSHiLoSensors:
         for key, ilo_key in ilo_keys:
             try:
                 data[key] = int(response[ilo_key].split()[0])
-            except (KeyError, ValueError):
-                self.log.warning("Cannot parse data for %s", ilo_key)
+            except KeyError:
+                self.log.warning("Power usage row %s not found at %s. Original output:\n%s", ilo_key, self.host, original)
+            except (IndexError, ValueError):
+                self.log.warning("Cannot parse data for %s at %s (%s)", ilo_key, self.host, response[ilo_key])
                 data[key] = None
 
         return data
@@ -137,14 +167,14 @@ class SSHiLoSensors:
         data = {}
 
         for component in self.power_supplies:
-            response = self.show(component)
+            response, original = self.show(component, original=True)
             try:
                 data[response['ElementName']] = {
                     'operational': response.get('OperationalStatus')=='Ok',
                     'health': response.get('HealthState')=='Ok'
                 }
             except KeyError:
-                self.log.warning("Cannot parse data for %s", component)
+                self.log.warning("Cannot parse data for %s at %s. Original output:\n%s", component, self.host, original)
 
         return data
 
@@ -154,13 +184,15 @@ class SSHiLoSensors:
         data = {}
 
         for component in self.sensors:
-            response = self.show(component)
+            response, original = self.show(component, original=True)
             try:
                 if response['CurrentReading'] != 'N/A':
                     data[response['ElementName']] = int(response['CurrentReading'])
                 else:
                     self.log.debug("Reading for %s is N/A", component)
-            except (KeyError, ValueError):
-                self.log.warning("Cannot parse data for %s", component)
+            except KeyError:
+                self.log.warning("Cannot parse data for %s at %s. Original output:\n", component, self.host, original)
+            except ValueError:
+                self.log.warning("Cannot parse data for %s at %s (%s)", component, self.host, response['CurrentReading'])
 
         return data
