@@ -40,11 +40,6 @@ if __name__ == '__main__':
 
     format = logging.Formatter("%(asctime)s  %(levelname)-8s %(name)-36s %(message)s", "%H:%M:%S")
 
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.WARNING)
-    ch.setFormatter(format)
-    baselog.addHandler(ch)
-
     log_file = os.path.join(config['logging_dir'], 'monitor')
     rfh = logging.handlers.TimedRotatingFileHandler(log_file, 'midnight')
     rfh.setLevel(logging.INFO)
