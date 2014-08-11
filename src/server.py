@@ -235,7 +235,9 @@ class Server:
 
         if self.server_status:
             # if server is down, you won't find anything interesting here
-            self.sensors_dao.store_power_usage(self.addr, **self.power_usage)
+            if all(k in self.power_usage and self.power_usage[k] is not None
+                     for k in ['present', 'average', 'minimum', 'maximum'])
+                self.sensors_dao.store_power_usage(self.addr, **self.power_usage)
 
             for sensor, reading in self.temperature.iteritems():
                 self.sensors_dao.store_temperature(self.addr, sensor, reading)
