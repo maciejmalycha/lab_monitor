@@ -39,7 +39,7 @@ class Alarm:
             self.sent = False
             self.active = active
             self.changed = datetime.datetime.now()
-            self.log.info("Changed state to %s", "active" if self.active else "inactive")
+            self.log.info("Changed state to %s for %s", "active" if self.active else "inactive", repr(self.resource))
             if self.master is not None:
                 self.master.check()
 
@@ -143,8 +143,8 @@ class UPSServerPowerAlarm(Alarm):
         if not self.resource.server_status:
             return
 
-        self.update(self.resource.power_units['Power Supply 1']['health'] 
-                     and self.resource.power_units['Power Supply 1']['operational'])
+        self.update(not self.resource.power_units['Power Supply 1']['health'] 
+                     or not self.resource.power_units['Power Supply 1']['operational'])
 
 
 class GridServerPowerAlarm(Alarm):
@@ -156,8 +156,8 @@ class GridServerPowerAlarm(Alarm):
         if not self.resource.server_status:
             return
 
-        self.update(self.resource.power_units['Power Supply 2']['health'] 
-                     and self.resource.power_units['Power Supply 2']['operational'])
+        self.update(not self.resource.power_units['Power Supply 2']['health'] 
+                     or not self.resource.power_units['Power Supply 2']['operational'])
 
 
 class TemperatureAlarm(Alarm):

@@ -45,7 +45,7 @@ class SSHiLoSensors:
         try:
             self.ssh.connect(self.host, username=self.user, password=self.password)
             return True
-        except IOError as e:
+        except (IOError, paramiko.SSHException) as e:
             self.log.exception("Cannot connect to %s", self.host)
 
     def disconnect(self):
@@ -154,6 +154,7 @@ class SSHiLoSensors:
                 data[key] = int(response[ilo_key].split()[0])
             except KeyError:
                 self.log.warning("Power usage row %s not found at %s. Original output:\n%s", ilo_key, self.host, original)
+                data[key] = None
             except (IndexError, ValueError):
                 self.log.warning("Cannot parse data for %s at %s (%s)", ilo_key, self.host, response[ilo_key])
                 data[key] = None

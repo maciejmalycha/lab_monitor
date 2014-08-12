@@ -38,7 +38,7 @@ if __name__ == '__main__':
     baselog = logging.getLogger('lab_monitor')
     baselog.setLevel(logging.INFO)
 
-    format = logging.Formatter("%(asctime)s  %(levelname)-8s %(name)-36s %(message)s", "%H:%M:%S")
+    format = logging.Formatter("%(asctime)s  %(levelname)-8s %(name)-40s %(threadName)-10s  %(message)s", "%H:%M:%S")
 
     log_file = os.path.join(config['logging_dir'], 'monitor')
     rfh = logging.handlers.TimedRotatingFileHandler(log_file, 'midnight')

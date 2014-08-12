@@ -129,6 +129,22 @@ function rackDiagram(ctx, map, url_template, lab, racks) {
             ctx.fillText(server.addr, x+rack_width/2, y+h-2);
         }
 
+        // server status
+        if(!server.status)
+        {
+            ctx.beginPath();
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#800';
+            ctx.moveTo(x, y);
+            ctx.lineTo(x+w, y+h);
+            ctx.moveTo(x+w, y);
+            ctx.lineTo(x, y+h);
+            ctx.stroke();
+            ctx.closePath();
+
+            return; // don't show temperature
+        }
+
         // temperature
         ctx.font = '20px "Source Sans Pro"';
         ctx.textAlign = 'center';
