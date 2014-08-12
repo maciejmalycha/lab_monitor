@@ -65,6 +65,16 @@ if __name__ == '__main__':
         baselog.exception("Cannot connect to the Redis server")
         sys.exit(1)
 
+    def stateupd(state):
+        try:
+            red.publish('lab_monitor.state', state)
+            red.set('lab_monitor.last_state', state)
+        except Exception:
+            baselog.exception("Cannot update state")
+            # it's not that severe, don't reraise
+
+    stateupd('starting')
+
     # a monitor registers its process id to redis,
     # if another instance is running right now,
     # interrupt it and wait until it finishes
@@ -95,15 +105,6 @@ if __name__ == '__main__':
         baselog.exception("Cannot connect to the XMPP server")
         sys.exit(1)
 
-    def stateupd(state):
-        try:
-            red.publish('lab_monitor.state', state)
-            red.set('lab_monitor.last_state', state)
-        except Exception:
-            baselog.exception("Cannot update state")
-            # it's not that severe, don't reraise
-
-    stateupd('starting')
     try:
         lab = construct_lab.run(config['num_racks'], servers_dao, sensors_dao, True, monitor_opts)
     except Exception:
