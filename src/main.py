@@ -79,7 +79,7 @@ if __name__ == '__main__':
 
     print procutils.getpid()
 
-    baselog = logging.getLogger('lab_monitor')
+    baselog = logging.getLogger()
     baselog.setLevel(logging.INFO)
 
     format = logging.Formatter("%(asctime)s  %(levelname)-8s %(name)-36s %(message)s", "%H:%M:%S")

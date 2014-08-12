@@ -35,7 +35,7 @@ class Monitor(minuteworker.MinuteWorker):
         return [(self.check_server, (server,)) for server in self.lab.servers.itervalues()]
 
 if __name__ == '__main__':
-    baselog = logging.getLogger('lab_monitor')
+    baselog = logging.getLogger()
     baselog.setLevel(logging.INFO)
 
     format = logging.Formatter("%(asctime)s  %(levelname)-8s %(name)-40s %(threadName)-10s  %(message)s", "%H:%M:%S")
