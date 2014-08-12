@@ -77,8 +77,6 @@ class LabMonitor:
 
 if __name__ == '__main__':
 
-    print procutils.getpid()
-
     baselog = logging.getLogger()
     baselog.setLevel(logging.INFO)
 

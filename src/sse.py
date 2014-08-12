@@ -6,6 +6,7 @@ class EventStream:
     def __init__(self, red, rkey):
         self.red = red
         self.rkey = rkey
+        self.subs = []
 
     def encode(self, string):
         """Encodes string so that it can be sent as SSE"""
@@ -17,10 +18,17 @@ class EventStream:
         """Yields messages whenever pubsub receives them"""
         pubsub = self.red.pubsub()
         pubsub.subscribe(self.rkey)
+        self.subs.append(pubsub)
         try:
             for message in pubsub.listen():
                 if message['type'] == 'message':
                     yield self.encode(message['data'])
+                elif message['type'] == 'unsubscribe':
+                    return
         except:
             pubsub.unsubscribe()
-            raise StopIteration
+            return
+
+    def close_all(self):
+        for sub in self.subs:
+            sub.unsubscribe()
