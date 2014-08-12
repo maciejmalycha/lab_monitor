@@ -35,7 +35,7 @@ class Monitor(minuteworker.MinuteWorker):
         return [(self.check_server, (server,)) for server in self.lab.servers.itervalues()]
 
 if __name__ == '__main__':
-    baselog = logging.getLogger('lab_monitor')
+    baselog = logging.getLogger()
     baselog.setLevel(logging.INFO)
 
     format = logging.Formatter("%(asctime)s  %(levelname)-8s %(name)-40s %(threadName)-10s  %(message)s", "%H:%M:%S")
@@ -64,6 +64,16 @@ if __name__ == '__main__':
     except Exception:
         baselog.exception("Cannot connect to the Redis server")
         sys.exit(1)
+
+    def stateupd(state):
+        try:
+            red.publish('lab_monitor.state', state)
+            red.set('lab_monitor.last_state', state)
+        except Exception:
+            baselog.exception("Cannot update state")
+            # it's not that severe, don't reraise
+
+    stateupd('starting')
 
     # a monitor registers its process id to redis,
     # if another instance is running right now,
@@ -95,15 +105,6 @@ if __name__ == '__main__':
         baselog.exception("Cannot connect to the XMPP server")
         sys.exit(1)
 
-    def stateupd(state):
-        try:
-            red.publish('lab_monitor.state', state)
-            red.set('lab_monitor.last_state', state)
-        except Exception:
-            baselog.exception("Cannot update state")
-            # it's not that severe, don't reraise
-
-    stateupd('starting')
     try:
         lab = construct_lab.run(config['num_racks'], servers_dao, sensors_dao, True, monitor_opts)
     except Exception:
