@@ -114,12 +114,16 @@ success("Redis server is available")
 
 try:
     jid = xmpp.protocol.JID(config['xmpp']['sender'])
-    cl = xmpp.Client(jid.getDomain(),debug=[])
+    cl = xmpp.Client(jid.getDomain(), debug=[])
     cl.connect() or error("Cannot connect to XMPP server")
     cl.auth(jid.getNode(), config['xmpp']['password']) or error("Wrong XMPP credentials!".format(jid))
+    success("Successfully connected to the XMPP server.")
+    test_msg = raw_input("Do you want to send a test message? [y/n] ").lower()
+    if test_msg == 'y':
+        cl.send(xmpp.protocol.Message(config['xmpp']['recipient'], 'testing xmpp notifications', typ='chat'))
+        success("Test message sent to {0}".format(config['xmpp']['recipient']))
 except Exception as e:
     error("XMPP doesn't work properly. {0}".format(e))
-success("XMPP works")
 
 print
 success("Congratulations! All tests passed.")
